@@ -5,6 +5,6 @@
  */
 window.POKE_ALLOWED_TRAINER_NAMES = [
   "전수민",
-  // "홍길동",
-  // "김피카"
+  "김규민",
+  "심지호"
 ];
