@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>포켓몬 배움 탐험대</title>
+  <link rel="stylesheet" href="./dist/styles.css">
+</head>
+<body>
+  <div id="bgDeco" class="bg-deco" aria-hidden="true"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <section id="introOverlay" class="intro-overlay" aria-labelledby="introTitle">
+    <div id="introStage" class="intro-stage">
+      <div class="intro-visual" aria-hidden="true">
+        <span class="intro-adventure-tag">LEARNING ADVENTURE</span>
+        <span class="intro-sun"></span>
+        <div id="introMascot" class="intro-mascot"></div>
+        <img class="intro-friend intro-eevee" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/133.png" alt="">
+        <img class="intro-friend intro-bulbasaur" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/1.png" alt="">
+        <img class="intro-friend intro-squirtle" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/7.png" alt="">
+        <span class="intro-route"></span>
+      </div>
+      <div class="speech-bubble">
+        <span class="intro-kicker">POKÉ LEARN QUEST</span>
+        <h1 id="introTitle">포켓몬 배움 탐험대</h1>
+        <p id="dlgText">포켓몬과 함께하는 배움 모험에 온 것을 환영해요!</p>
+        <button id="introNext" class="primary-button" type="button">모험 시작</button>
+      </div>
+    </div>
+
+    <form id="nameEntry" class="name-entry hidden-panel">
+      <label for="nameInput">이름을 알려주세요</label>
+      <div class="name-row">
+        <input id="nameInput" maxlength="6" autocomplete="nickname" placeholder="이름" required>
+        <button class="primary-button" type="submit">다음</button>
+      </div>
+      <p id="accessMessage" class="access-message" role="alert" aria-live="assertive"></p>
+    </form>
+
+    <div id="avatarPick" class="avatar-pick hidden-panel">
+      <div class="picker-head">
+        <div>
+          <h2>함께 공부할 포켓몬을 골라요</h2>
+          <p>진화형을 제외한 인기 포켓몬 60종</p>
+        </div>
+        <button id="closeAvatar" class="ghost-button" type="button">닫기</button>
+      </div>
+      <div id="avatarGrid" class="avatar-grid" role="list"></div>
+    </div>
+  </section>
+
+  <div id="app" class="app-shell hidden-panel">
+    <aside class="sidebar">
+      <button id="playerCard" class="player-card" type="button" aria-label="아바타 바꾸기">
+        <span id="sideMascot" class="side-mascot"></span>
+        <span class="player-copy">
+          <strong id="sideName">친구</strong>
+          <small id="sideStars">별 0개</small>
+        </span>
+      </button>
+
+      <nav class="side-nav" aria-label="주 메뉴">
+        <button class="nav-button active" data-nav="dashboard" type="button">포켓몬 센터</button>
+        <button class="nav-button" data-nav="game" type="button">게임하기</button>
+        <button class="nav-button" data-nav="today" type="button">오늘의 탐험</button>
+        <button class="nav-button" data-nav="pokedex" type="button">나의 도감</button>
+        <details id="sideMoreMenu" class="side-more">
+          <summary>더보기</summary>
+          <div class="side-more-panel">
+            <button class="nav-button" data-nav="report" type="button">학습 리포트</button>
+            <button class="nav-button" data-nav="leaderboard" type="button">트레이너 순위표</button>
+            <button class="nav-button" data-nav="records" type="button">나의 기록</button>
+            <button class="nav-button" data-nav="help" type="button">도움말</button>
+            <button class="nav-button" data-nav="about" type="button">정보</button>
+          </div>
+        </details>
+      </nav>
+
+      <div class="side-panel">
+        <div id="levelCard" class="level-card"></div>
+        <p id="cheerCard" class="cheer-card"></p>
+      </div>
+
+      <div class="side-actions">
+        <button id="musicButton" class="icon-button" type="button" aria-pressed="true" aria-label="배경 음악 켜기 또는 끄기">음악</button>
+        <button id="sfxButton" class="icon-button" type="button" aria-pressed="true" aria-label="효과음 켜기 또는 끄기">효과음</button>
+        <button id="changeNameButton" class="icon-button" type="button">이름 변경</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section id="screen-dashboard" class="screen active">
+        <div class="center-roof"><span>POKÉMON CENTER</span></div>
+        <div class="center-welcome">
+          <div id="dashboardChansey" class="center-chansey"></div>
+          <div class="center-welcome-copy"><span class="eyebrow">WELCOME, TRAINER</span><h2 id="dashboardGreeting"></h2><p>잠깐 쉬어 가며 오늘의 학습 모험을 준비해요.</p></div>
+          <div id="dashboardDaily" class="center-daily"></div>
+        </div>
+        <div class="center-actions" aria-label="빠른 메뉴">
+          <button id="dashboardContinue" class="center-action primary" type="button"><b>이어하기</b><span>지난 모험으로 돌아가요</span></button>
+          <button id="dashboardGames" class="center-action" type="button"><b>게임 선택</b><span>새로운 훈련을 시작해요</span></button>
+          <button id="dashboardToday" class="center-action" type="button"><b>오늘의 탐험</b><span>세 가지 일일 임무</span></button>
+          <button id="dashboardDex" class="center-action" type="button"><b>나의 도감</b><span>발견한 포켓몬 확인</span></button>
+        </div>
+        <div class="center-panels">
+          <article class="center-panel"><h3>트레이너 현황</h3><div id="dashboardStats" class="center-stats"></div></article>
+          <article class="center-panel"><h3>최근 모험</h3><div id="dashboardRecent" class="center-recent"></div></article>
+        </div>
+      </section>
+
+      <section id="screen-grade" class="screen">
+        <div id="gradeHero" class="grade-hero"></div>
+        <div class="screen-heading">
+          <div>
+            <span class="eyebrow">STEP 1</span>
+            <h2>학년을 골라요</h2>
+          </div>
+        </div>
+        <div id="gradeGrid" class="grade-grid"></div>
+        <p id="gradeTip" class="grade-tip"></p>
+      </section>
+
+      <section id="screen-today" class="screen">
+        <div class="screen-heading">
+          <div><span class="eyebrow">DAILY QUEST</span><h2>오늘의 10분 탐험</h2></div>
+          <span id="todayGrade" class="today-grade"></span>
+        </div>
+        <div class="today-hero">
+          <div id="todayPartner" class="today-partner"></div>
+          <div>
+            <strong id="todayGreeting"></strong>
+            <p>세 가지 임무를 완료하고 오늘의 탐험 배지를 받아요.</p>
+          </div>
+          <div id="todayBadge" class="today-badge"></div>
+          <div id="todayRivals" class="today-rivals" aria-label="로이와 로사"></div>
+        </div>
+        <div id="todayMissionGrid" class="today-mission-grid"></div>
+      </section>
+
+      <section id="screen-pokedex" class="screen">
+        <div class="screen-heading">
+          <div><span class="eyebrow">POKÉDEX</span><h2>나의 포켓몬 도감</h2></div>
+          <span id="pokedexCount" class="today-grade"></span>
+        </div>
+        <div class="pokedex-layout">
+          <div id="pokedexGrid" class="pokedex-grid" aria-label="발견한 포켓몬 목록"></div>
+          <article id="pokedexDetail" class="pokedex-detail" aria-live="polite">
+            <p>발견한 포켓몬을 선택하면 자세한 정보를 볼 수 있어요.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-report" class="screen">
+        <div class="screen-heading"><div><span class="eyebrow">LEARNING REPORT</span><h2>학습 리포트</h2></div></div>
+        <div id="reportSummary" class="report-summary"></div>
+        <div class="report-layout">
+          <article class="report-panel"><h3>영역별 성장</h3><div id="reportBars" class="report-bars"></div></article>
+          <article class="report-panel report-advice"><h3>다음 탐험 추천</h3><div id="reportAdvice"></div></article>
+        </div>
+      </section>
+
+      <section id="screen-mode" class="screen">
+        <div class="screen-heading">
+          <button class="back-button" data-action="grades" type="button">학년으로</button>
+          <div><span id="modeChip" class="eyebrow"></span><h2>놀이 방법을 골라요</h2></div>
+        </div>
+        <div id="modeGrid" class="mode-grid"></div>
+      </section>
+
+      <section id="screen-quiz" class="screen game-screen">
+        <div class="hud">
+          <span>점수 <b id="quizScore">0</b></span>
+          <span>시간 <b id="quizTime">0:00</b></span>
+          <span id="quizCount">문제 1/10</span>
+          <button class="quit-button" data-quit="quiz" type="button">그만하기</button>
+        </div>
+        <div class="quiz-layout">
+          <article class="problem-card">
+            <div id="quizMascot" class="problem-mascot"></div>
+            <div id="quizDots" class="quiz-dots"></div>
+            <p id="quizStreak" class="streak"></p>
+            <div id="quizProblem" class="problem-text"></div>
+            <div id="quizAnswer" class="answer-display">?</div>
+            <p id="quizFeedback" class="feedback" aria-live="polite"></p>
+          </article>
+          <div id="quizControls" class="control-panel"></div>
+        </div>
+      </section>
+
+      <section id="screen-rain" class="screen game-screen">
+        <div class="hud">
+          <span id="rainHp">❤️❤️❤️❤️❤️</span>
+          <span>점수 <b id="rainScore">0</b></span>
+          <span>단계 <b id="rainWave">1</b></span>
+          <span>속도 <b id="rainSpeed">1.0</b>x</span>
+          <button class="quit-button" data-quit="rain" type="button">그만하기</button>
+        </div>
+        <div class="rain-layout">
+          <div id="rainField" class="playfield"><div class="ground"></div></div>
+          <aside class="rain-controls">
+            <div id="rainTrainer" class="trainer-cameo"></div>
+            <p>문제가 땅에 닿기 전에 답을 입력해요.</p>
+            <div id="rainInput" class="answer-display">?</div>
+            <div id="rainKeypad" class="keypad"></div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="screen-mole" class="screen game-screen">
+        <div class="hud">
+          <span>점수 <b id="moleScore">0</b></span>
+          <span>시간 <b id="moleTime">60</b>초</span>
+          <span>연속 <b id="moleCombo">0</b></span>
+          <button class="quit-button" data-quit="mole" type="button">그만하기</button>
+        </div>
+        <h2 class="target-title"><b id="moleTarget"></b>의 답을 든 디그다를 찾아요</h2>
+        <div id="moleGrid" class="mole-grid"></div>
+      </section>
+
+      <section id="screen-memory" class="screen game-screen">
+        <div class="hud">
+          <span>점수 <b id="memoryScore">0</b></span>
+          <span>뒤집기 <b id="memoryMoves">0</b>번</span>
+          <span>완성 <b id="memoryMatched">0</b>/<b id="memoryTotal">0</b></span>
+          <span>남은 시간 <b id="memoryTime">10:00</b></span>
+          <button class="quit-button" data-quit="memory" type="button">그만하기</button>
+        </div>
+        <div id="memoryGrid" class="memory-grid"></div>
+      </section>
+
+      <section id="screen-ox" class="screen game-screen">
+        <div class="hud">
+          <span>점수 <b id="oxScore">0</b></span>
+          <span>시간 <b id="oxTime">60</b>초</span>
+          <span>연속 <b id="oxCombo">0</b></span>
+          <button class="quit-button" data-quit="ox" type="button">그만하기</button>
+        </div>
+        <div class="ox-layout">
+          <div id="oxProblem" class="ox-problem"></div>
+          <div class="ox-companion" aria-live="polite">
+            <div id="oxPsyduck" class="ox-mascot thinking"></div>
+            <p id="oxReaction">고라파덕도 고민 중...</p>
+          </div>
+          <div class="ox-buttons">
+            <button class="ox-button yes" data-ox="true" type="button">O 맞아요</button>
+            <button class="ox-button no" data-ox="false" type="button">X 아니에요</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-balloon" class="screen game-screen">
+        <div class="hud">
+          <span>점수 <b id="balloonScore">0</b></span>
+          <span>시간 <b id="balloonTime">60</b>초</span>
+          <span>연속 <b id="balloonCombo">0</b></span>
+          <span>속도 <b id="balloonSpeed">1.0</b>x</span>
+          <button class="quit-button" data-quit="balloon" type="button">그만하기</button>
+        </div>
+        <h2 class="target-title"><b id="balloonTarget"></b>의 정답 풍선을 터뜨려요</h2>
+        <div id="balloonField" class="balloon-field"></div>
+      </section>
+
+      <section id="screen-space" class="screen game-screen">
+        <div class="hud">
+          <span>점수 <b id="spaceScore">0</b></span>
+          <span>시간 <b id="spaceTime">0:00</b></span>
+          <span id="spaceCount">문제 1/10</span>
+          <span>연속 <b id="spaceStreak">0</b></span>
+          <button class="quit-button" data-quit="space" type="button">그만하기</button>
+        </div>
+        <div class="space-layout">
+          <article class="space-question-card">
+            <div id="spaceTrainer" class="trainer-cameo"></div>
+            <span id="spaceKind" class="space-kind"></span>
+            <h2 id="spaceTitle"></h2>
+            <p id="spaceInstruction"></p>
+            <div id="spaceTarget" class="space-target"></div>
+            <p id="spaceFeedback" class="feedback" aria-live="polite"></p>
+          </article>
+          <div id="spaceChoices" class="space-choices"></div>
+        </div>
+      </section>
+
+      <section id="screen-symmetry" class="screen game-screen">
+        <div class="hud">
+          <span>점수 <b id="symmetryScore">0</b></span><span>단계 <b id="symmetryRound">1/5</b></span>
+          <span>실수 <b id="symmetryMistakes">0</b></span><button class="quit-button" data-quit="symmetry" type="button">그만하기</button>
+        </div>
+        <div class="lab-layout">
+          <article class="lab-guide"><div id="symmetryMascot" class="lab-pokemon"></div><h2>메타몽 대칭 연구소</h2><p>왼쪽 모양과 똑같이 오른쪽 칸을 채워 주세요.</p></article>
+          <div class="lab-workbench"><div id="symmetryGrid" class="symmetry-grid"></div><button id="symmetryCheck" class="primary-button" type="button">대칭 확인</button></div>
+        </div>
+      </section>
+
+      <section id="screen-coordinate" class="screen game-screen">
+        <div class="hud">
+          <span>점수 <b id="coordinateScore">0</b></span><span>지도 <b id="coordinateStage">1/5</b></span>
+          <span>이동 <b id="coordinateMoves">0</b></span><button class="quit-button" data-quit="coordinate" type="button">그만하기</button>
+        </div>
+        <div class="coordinate-layout">
+          <article class="coordinate-guide"><div id="coordinateMascot" class="lab-pokemon"></div><h2>폴리곤 좌표 미로</h2><p id="coordinateMission"></p></article>
+          <div id="coordinateBoard" class="coordinate-board" aria-label="좌표 미로"></div>
+          <div class="direction-pad" aria-label="이동 버튼"><button data-move="up" type="button">▲</button><button data-move="left" type="button">◀</button><button data-move="down" type="button">▼</button><button data-move="right" type="button">▶</button></div>
+        </div>
+      </section>
+
+      <section id="screen-history" class="screen game-screen">
+        <div class="hud">
+          <span>점수 <b id="historyScore">0</b></span><span>복원 <b id="historyCount">0/8</b></span>
+          <span>실수 <b id="historyMistakes">0</b></span><button class="quit-button" data-quit="history" type="button">그만하기</button>
+        </div>
+        <div class="history-layout">
+          <aside class="history-guide"><div id="historyMascot" class="lab-pokemon"></div><h2>세레비 역사 시간여행</h2><p>가장 오래된 사건부터 차례대로 선택해 시간의 길을 복원해요.</p></aside>
+          <div class="history-workspace"><div id="historyTimeline" class="history-timeline"></div><div id="historyCards" class="history-cards"></div><p id="historyFeedback" class="feedback" aria-live="polite"></p></div>
+        </div>
+      </section>
+
+      <section id="screen-safety" class="screen game-screen">
+        <div class="hud">
+          <span>점수 <b id="safetyScore">0</b></span><span id="safetyCount">상황 1/10</span>
+          <span>연속 <b id="safetyStreak">0</b></span><button class="quit-button" data-quit="safety" type="button">그만하기</button>
+        </div>
+        <div class="safety-layout">
+          <aside class="safety-guide"><div id="safetyMascot" class="lab-pokemon"></div><p id="safetyReaction">고라파덕과 안전한 행동을 찾아봐요.</p></aside>
+          <article class="safety-card"><span id="safetyCategory" class="knowledge-category"></span><h2 id="safetyQuestion"></h2><div id="safetyChoices" class="safety-choices"></div><p id="safetyExplanation" class="knowledge-explanation" aria-live="polite"></p></article>
+        </div>
+      </section>
+
+      <section id="screen-snack" class="screen game-screen">
+        <div class="hud">
+          <span>점수 <b id="snackScore">0</b></span><span>시간 <b id="snackTime">60</b>초</span>
+          <span>연속 <b id="snackCombo">0</b></span><span>속도 <b id="snackSpeed">1.0</b>x</span>
+          <button class="quit-button" data-quit="snack" type="button">그만하기</button>
+        </div>
+        <div class="snack-layout">
+          <div id="snackField" class="snack-field" aria-label="잠만보 열매 캐치 게임"><div class="snack-clouds" aria-hidden="true"></div><div id="snackPlayer" class="snack-player"></div></div>
+          <aside class="snack-controls"><h2>잠만보 열매 캐치</h2><p>열매는 받고 바위는 피해요! 화면을 누르거나 버튼으로 이동할 수 있어요.</p><div class="snack-move-buttons"><button data-snack-move="left" type="button">◀ 왼쪽</button><button data-snack-move="right" type="button">오른쪽 ▶</button></div><div class="snack-legend"><span>🍎 +100</span><span>✨ +300</span><span>🪨 조심!</span></div></aside>
+        </div>
+      </section>
+
+      <section id="screen-mine" class="screen game-screen">
+        <div class="hud">
+          <span>남은 찌리리공 <b id="mineCounter">8</b></span>
+          <span>시간 <b id="mineTime">0:00</b></span>
+          <span>루트 <b id="mineStage">1/3</b></span>
+          <span>점수 <b id="mineScore">0</b></span>
+          <button class="quit-button" data-quit="mine" type="button">그만하기</button>
+        </div>
+        <div class="mine-shell" aria-label="찌리리공 초원 탐색">
+          <div class="mine-toolbar">
+            <div class="mine-led"><span>남은 찌리리공</span><b id="mineLedCount">008</b></div>
+            <button id="mineReset" class="mine-reset" type="button" aria-label="현재 루트 다시 시작">🙂</button>
+            <div class="mine-led"><span>탐험 시간</span><b id="mineLedTime">000</b></div>
+          </div>
+          <div class="mine-guide">
+            <p>숫자는 주변 8칸에 숨어 있는 찌리리공 수예요.</p>
+            <button id="mineMode" class="mine-mode" type="button" aria-pressed="false">🔎 열기 모드</button>
+          </div>
+          <div id="mineBoard" class="mine-board" role="grid" aria-label="찌리리공 찾기 게임판"></div>
+          <p class="mine-tip">컴퓨터: 왼쪽 클릭으로 열기 · 오른쪽 클릭으로 몬스터볼 표시</p>
+        </div>
+      </section>
+
+      <section id="screen-knowledge" class="screen game-screen knowledge-screen">
+        <div class="hud">
+          <span>점수 <b id="knowledgeScore">0</b></span>
+          <span>시간 <b id="knowledgeTime">0:00</b></span>
+          <span id="knowledgeCount">탐험 1/10</span>
+          <span>연속 <b id="knowledgeStreak">0</b></span>
+          <button class="quit-button" data-quit="knowledge" type="button">그만하기</button>
+        </div>
+        <div class="knowledge-layout">
+          <aside class="knowledge-map" aria-label="지식탐험 지도">
+            <div id="knowledgePartner" class="knowledge-partner"></div>
+            <span class="knowledge-map-title">지식탐험 지도</span>
+            <div class="knowledge-route" aria-hidden="true">
+              <span data-zone="과학">과학섬</span>
+              <span data-zone="사회">사회마을</span>
+              <span data-zone="역사">역사유적</span>
+              <span data-zone="생활">생활기지</span>
+            </div>
+            <div id="knowledgeProgress" class="knowledge-progress" aria-label="탐험 진행도"></div>
+          </aside>
+          <article class="knowledge-card">
+            <div class="knowledge-card-head">
+              <span id="knowledgeCategory" class="knowledge-category"></span>
+              <span id="knowledgeLevel" class="knowledge-level"></span>
+            </div>
+            <h2 id="knowledgeQuestion"></h2>
+            <div id="knowledgeChoices" class="knowledge-choices"></div>
+            <div id="knowledgeExplanation" class="knowledge-explanation" role="status" aria-live="polite"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="screen-result" class="screen result-screen">
+        <article class="result-card">
+          <div id="resultMascot" class="result-mascot"></div>
+          <div>
+            <span id="resultStars" class="result-stars"></span>
+            <h2 id="resultTitle"></h2>
+            <p id="resultSpeech"></p>
+            <div id="resultStats" class="result-stats"></div>
+            <div class="result-actions">
+              <button class="primary-button" data-action="retry" type="button">다시 도전</button>
+              <button class="secondary-button" data-action="modes" type="button">다른 게임</button>
+              <button class="ghost-button" data-action="grades" type="button">학년 선택</button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section id="screen-leaderboard" class="screen">
+        <div class="screen-heading">
+          <div><span class="eyebrow">TRAINER RANKING</span><h2>트레이너 순위표</h2></div>
+          <select id="rankingMode" class="ranking-select" aria-label="순위표 게임 선택"><option value="all">전체 성장 순위</option></select>
+        </div>
+        <p class="ranking-note">이 브라우저에 저장된 플레이어 이름별 기록을 비교하는 로컬 순위표예요.</p>
+        <div id="rankingPodium" class="ranking-podium"></div>
+        <div id="rankingTable" class="ranking-table"></div>
+      </section>
+
+      <section id="screen-records" class="screen">
+        <div class="screen-heading">
+          <div><span class="eyebrow">HISTORY</span><h2>나의 기록</h2></div>
+          <button id="clearRecords" class="ghost-button" type="button">기록 지우기</button>
+        </div>
+        <div id="recordSummary" class="record-summary"></div>
+        <div id="recordTable" class="record-table"></div>
+      </section>
+
+      <section id="screen-help" class="screen">
+        <div class="screen-heading"><div><span class="eyebrow">GUIDE</span><h2>게임 도움말</h2></div></div>
+        <div class="help-start"><strong>처음인가요?</strong><span>학년을 고른 뒤 원하는 게임을 누르면 바로 시작돼요. 난이도는 플레이하며 자연스럽게 올라갑니다.</span></div>
+        <div class="help-filters" aria-label="도움말 영역 선택">
+          <button class="active" data-help-category="all" type="button">전체</button><button data-help-category="암산·수 연산" type="button">암산·연산</button><button data-help-category="도형·공간" type="button">도형·공간</button><button data-help-category="지식탐험" type="button">지식탐험</button><button data-help-category="미니게임" type="button">미니게임</button>
+        </div>
+        <div id="helpCards" class="help-grid"></div>
+      </section>
+
+      <section id="screen-about" class="screen">
+        <article class="about-card">
+          <span class="eyebrow">VERSION 1.0</span>
+          <h2>포켓몬 배움 탐험대</h2>
+          <p>포켓몬과 함께 연산·도형·공간 감각과 다양한 생활 지식을 익히는 학년별 교육 게임입니다.</p>
+          <p>포켓몬 데이터와 일부 이미지·울음소리는 <a href="https://pokeapi.co/" target="_blank" rel="noreferrer">PokéAPI</a> 및 관련 공개 저장소를 통해 제공됩니다.</p>
+          <p><strong>비상업적·비공식 교육용 프로젝트</strong>이며 Nintendo, The Pokémon Company 및 Game Freak와 제휴하지 않았고 공식 승인을 받은 서비스가 아닙니다.</p>
+          <p>Pokémon과 관련 캐릭터·명칭·이미지·음원에 관한 권리는 각 권리자에게 있습니다.</p>
+          <p>트레이너 스프라이트 제공: <a href="https://play.pokemonshowdown.com/sprites/trainers/" target="_blank" rel="noreferrer">Pokémon Showdown Trainer Sprites</a>. 사용 스프라이트 제작자: ZacWeavile, kyledove. 원본 이미지는 편집하지 않았습니다.</p>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <noscript>이 게임은 JavaScript를 켜야 실행할 수 있습니다.</noscript>
+  <script src="./config/allowed-trainers.js"></script>
+  <script defer src="./dist/main.js"></script>
+</body>
+</html>
