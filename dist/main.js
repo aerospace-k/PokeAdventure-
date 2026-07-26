@@ -1648,6 +1648,9 @@ function startMole() {
     const config = MOLE_CONFIG[state.diff];
     mole = { running: true, score: 0, combo: 0, best: 0, hits: 0, bonusHits: 0, time: 60, target: newProblem("easy"), holes: [], spawnTimer: null, countdown: null, started: performance.now() };
     const grid = byId("moleGrid");
+    const celebration = byId("moleCelebration");
+    celebration.className = "mole-celebration";
+    celebration.replaceChildren();
     grid.replaceChildren();
     for (let index = 0; index < 9; index += 1) {
         const holeElement = document.createElement("div");
@@ -1717,9 +1720,41 @@ function hideMole(index) {
         return;
     hole.active = false;
     hole.button.classList.remove("up", "hit", "miss");
+    hole.button.disabled = false;
+    hole.button.parentElement?.classList.remove("hit-success", "bonus-success");
     if (hole.timeout !== null)
         window.clearTimeout(hole.timeout);
     hole.timeout = null;
+}
+function showMoleSuccess(index, gained, bonus, combo) {
+    if (!mole)
+        return;
+    const hole = mole.holes[index];
+    if (!hole)
+        return;
+    const screen = byId("screen-mole");
+    const celebration = byId("moleCelebration");
+    const scorePop = document.createElement("span");
+    scorePop.className = "mole-score-pop" + (bonus ? " bonus" : "");
+    scorePop.textContent = "+" + gained;
+    hole.button.parentElement?.append(scorePop);
+    hole.button.parentElement?.classList.add("hit-success");
+    if (bonus)
+        hole.button.parentElement?.classList.add("bonus-success");
+    celebration.className = "mole-celebration show" + (bonus ? " bonus" : "");
+    celebration.innerHTML = "<strong>" + (bonus ? "두트리오 대성공!" : "정답!") + "</strong><span>+" + gained + "점" + (combo >= 2 ? " · " + combo + "연속" : "") + "</span>";
+    screen.classList.remove("mole-correct-flash", "mole-bonus-flash");
+    void screen.offsetWidth;
+    screen.classList.add(bonus ? "mole-bonus-flash" : "mole-correct-flash");
+    pokemonSparkBurst(bonus ? 32 : 20);
+    if (navigator.vibrate)
+        navigator.vibrate(bonus ? [45, 35, 80] : 45);
+    window.setTimeout(() => {
+        scorePop.remove();
+        celebration.className = "mole-celebration";
+        celebration.replaceChildren();
+        screen.classList.remove("mole-correct-flash", "mole-bonus-flash");
+    }, bonus ? 1000 : 760);
 }
 function clearActiveMoles() {
     if (!mole)
@@ -1742,7 +1777,19 @@ function hitMole(index) {
         mole.best = Math.max(mole.best, mole.combo);
         mole.hits += 1;
         correctSound();
-        clearActiveMoles();
+        showMoleSuccess(index, gained, hole.bonus, mole.combo);
+        const currentGame = mole;
+        mole.holes.forEach((_other, holeIndex) => { if (holeIndex !== index)
+            hideMole(holeIndex); });
+        hole.active = false;
+        hole.button.disabled = true;
+        if (hole.timeout !== null)
+            window.clearTimeout(hole.timeout);
+        hole.timeout = window.setTimeout(() => {
+            if (mole !== currentGame)
+                return;
+            hideMole(index);
+        }, hole.bonus ? 900 : 620);
         mole.target = newProblem(difficultyForElapsed(mole.started, 60));
     }
     else {
@@ -2332,6 +2379,106 @@ function makeShapeQuestion(difficulty) {
     }));
     return { kind: "shape", title: "회전해도 같은 도형은?", instruction: "위 도형을 머릿속으로 돌려 같은 모양을 찾아보세요.", target, choices };
 }
+function rotationPuzzleSvg(variant, rotation, mirrored, marker) {
+    const paths = [
+        "M-47-38H17V-15H45V17H10V41H-27V9H-47Z",
+        "M-43-42H7V-23H39V8H20V41H-19V15H-43Z",
+        "M-46-31H-18V-45H18V-15H46V18H15V43H-22V12H-46Z",
+        "M-45-39H11V-18H43V13H25V42H-12V21H-45Z"
+    ];
+    const markerPoints = [[-28, -23], [23, -1], [-7, 27]];
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 140 120");
+    svg.setAttribute("class", "rotation-composite-svg");
+    svg.setAttribute("aria-label", "회전하여 비교하는 비대칭 복합도형");
+    const gradientId = "rotation-gradient-" + Math.random().toString(36).slice(2);
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    const gradient = document.createElementNS("http://www.w3.org/2000/svg", "linearGradient");
+    gradient.setAttribute("id", gradientId);
+    gradient.setAttribute("x1", "0");
+    gradient.setAttribute("y1", "0");
+    gradient.setAttribute("x2", "1");
+    gradient.setAttribute("y2", "1");
+    [["0%", "#89d8ff"], ["58%", "#469be2"], ["100%", "#2868b5"]].forEach(([offset, color]) => { const stop = document.createElementNS("http://www.w3.org/2000/svg", "stop"); stop.setAttribute("offset", offset); stop.setAttribute("stop-color", color); gradient.append(stop); });
+    defs.append(gradient);
+    const shadow = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+    shadow.setAttribute("cx", "70");
+    shadow.setAttribute("cy", "106");
+    shadow.setAttribute("rx", "43");
+    shadow.setAttribute("ry", "6");
+    shadow.setAttribute("fill", "#17365f");
+    shadow.setAttribute("opacity", ".16");
+    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    group.setAttribute("transform", "translate(70 57) rotate(" + rotation + ") scale(" + (mirrored ? -1 : 1) + " 1)");
+    const body = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    body.setAttribute("d", paths[variant % paths.length]);
+    body.setAttribute("fill", "url(#" + gradientId + ")");
+    body.setAttribute("stroke", "#183f76");
+    body.setAttribute("stroke-width", "5");
+    body.setAttribute("stroke-linejoin", "round");
+    const route = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    route.setAttribute("d", "M-31 4H5V25H27");
+    route.setAttribute("fill", "none");
+    route.setAttribute("stroke", "#d9f4ff");
+    route.setAttribute("stroke-width", "7");
+    route.setAttribute("stroke-linecap", "round");
+    route.setAttribute("stroke-linejoin", "round");
+    route.setAttribute("opacity", ".82");
+    const point = markerPoints[marker % markerPoints.length];
+    const badge = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    badge.setAttribute("cx", String(point[0]));
+    badge.setAttribute("cy", String(point[1]));
+    badge.setAttribute("r", "10");
+    badge.setAttribute("fill", "#ffdb43");
+    badge.setAttribute("stroke", "#704d00");
+    badge.setAttribute("stroke-width", "4");
+    const badgeCore = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    badgeCore.setAttribute("cx", String(point[0] - 2));
+    badgeCore.setAttribute("cy", String(point[1] - 2));
+    badgeCore.setAttribute("r", "3");
+    badgeCore.setAttribute("fill", "#fff8c8");
+    const notch = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    notch.setAttribute("points", "31,-14 45,-6 31,2");
+    notch.setAttribute("fill", "#ef5862");
+    notch.setAttribute("stroke", "#7d2933");
+    notch.setAttribute("stroke-width", "3");
+    notch.setAttribute("stroke-linejoin", "round");
+    group.append(body, route, badge, badgeCore, notch);
+    svg.append(defs, shadow, group);
+    return svg;
+}
+function makeAdvancedShapeQuestion(difficulty) {
+    const variant = randomInt(0, 3);
+    const marker = randomInt(0, 2);
+    const angles = difficulty === "hard" ? [0, 45, 90, 135, 180, 225, 270, 315] : [0, 90, 180, 270];
+    const targetRotation = choose(angles);
+    const target = document.createElement("div");
+    target.className = "rotation-puzzle-target";
+    target.append(rotationPuzzleSvg(variant, targetRotation, false, marker));
+    const optionData = [
+        { variant, mirrored: false, marker, correct: true },
+        { variant, mirrored: true, marker, correct: false },
+        { variant, mirrored: false, marker: (marker + 1) % 3, correct: false },
+        { variant: (variant + (difficulty === "easy" ? 2 : 1)) % 4, mirrored: false, marker, correct: false }
+    ];
+    const choices = shuffle(optionData).map((option, index) => {
+        let optionRotation = choose(angles);
+        if (option.correct && optionRotation === targetRotation)
+            optionRotation = (optionRotation + (difficulty === "hard" ? 135 : 90)) % 360;
+        return {
+            visual: rotationPuzzleSvg(option.variant, optionRotation, option.mirrored, option.marker),
+            label: (index + 1) + "번 회전 조각",
+            correct: option.correct
+        };
+    });
+    return {
+        kind: "shape",
+        title: "돌려서 완전히 겹치는 도형은?",
+        instruction: "돌출된 부분, 노란 표식, 빨간 꼭짓점의 위치 관계가 모두 같은 조각을 찾아보세요.",
+        target,
+        choices
+    };
+}
 function makeRotationQuestion(difficulty) {
     const arrows = ["↑", "→", "↓", "←"];
     const names = ["위쪽", "오른쪽", "아래쪽", "왼쪽"];
@@ -2583,6 +2730,96 @@ function makeNetQuestion() {
         choices: options.map((option, index) => ({ visual: netVisual(option.pattern), label: String.fromCharCode(65 + index) + "번 전개도", correct: option.correct }))
     };
 }
+const TOP_VIEW_SOLIDS = [
+    { solid: "cone", name: "원뿔", answer: "circle", minDifficulty: "easy" },
+    { solid: "cylinder", name: "원기둥", answer: "circle", minDifficulty: "easy" },
+    { solid: "cube", name: "정육면체", answer: "square", minDifficulty: "easy" },
+    { solid: "rectPrism", name: "직육면체", answer: "rectangle", minDifficulty: "easy" },
+    { solid: "sphere", name: "구", answer: "circle", minDifficulty: "normal" },
+    { solid: "squarePyramid", name: "사각뿔", answer: "square", minDifficulty: "normal" },
+    { solid: "triPyramid", name: "삼각뿔", answer: "triangle", minDifficulty: "normal" },
+    { solid: "hexPrism", name: "육각기둥", answer: "hexagon", minDifficulty: "hard" }
+];
+function topViewSolidSvg(solid, name) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 180 165");
+    svg.setAttribute("class", "solid-object-svg");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", name + " 입체도형");
+    const gradientId = "solid-gradient-" + Math.random().toString(36).slice(2);
+    const lightId = gradientId + "-light";
+    const common = `<defs><linearGradient id="${gradientId}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8de1ff"/><stop offset=".55" stop-color="#4b9fe4"/><stop offset="1" stop-color="#2869b7"/></linearGradient><linearGradient id="${lightId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dff8ff"/><stop offset="1" stop-color="#73c6ed"/></linearGradient></defs><ellipse cx="90" cy="148" rx="62" ry="10" fill="#183b68" opacity=".14"/>`;
+    const drawings = {
+        cone: `<path d="M30 126L90 22l60 104Q90 151 30 126Z" fill="url(#${gradientId})" stroke="#214d82" stroke-width="5" stroke-linejoin="round"/><ellipse cx="90" cy="126" rx="60" ry="19" fill="#63b8eb" stroke="#214d82" stroke-width="5"/><path d="M49 116Q90 132 131 116" fill="none" stroke="#d9f7ff" stroke-width="5" stroke-dasharray="8 7" opacity=".8"/>`,
+        cylinder: `<path d="M34 48v78c0 16 112 16 112 0V48Z" fill="url(#${gradientId})" stroke="#214d82" stroke-width="5"/><ellipse cx="90" cy="48" rx="56" ry="20" fill="url(#${lightId})" stroke="#214d82" stroke-width="5"/><ellipse cx="90" cy="126" rx="56" ry="20" fill="#4597dc" stroke="#214d82" stroke-width="5"/><path d="M34 49v77" stroke="#d8f6ff" stroke-width="6" opacity=".55"/>`,
+        sphere: `<circle cx="90" cy="82" r="60" fill="url(#${gradientId})" stroke="#214d82" stroke-width="5"/><ellipse cx="71" cy="58" rx="19" ry="28" fill="#dff8ff" opacity=".62" transform="rotate(35 71 58)"/><path d="M43 92Q90 118 137 92" fill="none" stroke="#d7f5ff" stroke-width="4" opacity=".45"/>`,
+        cube: `<polygon points="90,19 151,52 90,85 29,52" fill="#b9edff" stroke="#214d82" stroke-width="5" stroke-linejoin="round"/><polygon points="29,52 90,85 90,143 29,108" fill="#4e9ddd" stroke="#214d82" stroke-width="5" stroke-linejoin="round"/><polygon points="151,52 90,85 90,143 151,108" fill="#347fc8" stroke="#214d82" stroke-width="5" stroke-linejoin="round"/>`,
+        squarePyramid: `<polygon points="90,18 151,121 90,143 29,121" fill="#54a5e3" stroke="#214d82" stroke-width="5" stroke-linejoin="round"/><path d="M90 18L90 143M90 18L29 121M90 18L151 121" fill="none" stroke="#214d82" stroke-width="5"/><path d="M90 18L90 143L29 121Z" fill="#78c8ed" opacity=".72"/>`,
+        rectPrism: `<polygon points="74,25 156,61 105,88 23,52" fill="#b8edff" stroke="#214d82" stroke-width="5" stroke-linejoin="round"/><polygon points="23,52 105,88 105,140 23,104" fill="#559fda" stroke="#214d82" stroke-width="5" stroke-linejoin="round"/><polygon points="156,61 105,88 105,140 156,112" fill="#337bc2" stroke="#214d82" stroke-width="5" stroke-linejoin="round"/>`,
+        triPyramid: `<polygon points="90,17 151,128 29,128" fill="#54a5e3" stroke="#214d82" stroke-width="5" stroke-linejoin="round"/><path d="M90 17L90 128M90 17L29 128M90 17L151 128" stroke="#214d82" stroke-width="5"/><path d="M90 17L90 128L29 128Z" fill="#8bd5f3" opacity=".7"/>`,
+        hexPrism: `<path d="M48 39l42-19 42 19 18 34-18 34-42 19-42-19-18-34Z" fill="url(#${lightId})" stroke="#214d82" stroke-width="5"/><path d="M48 39v55l42 31 42-18 18-34v51l-18 25H48l-18-25V73" fill="url(#${gradientId})" stroke="#214d82" stroke-width="5" stroke-linejoin="round"/><path d="M90 126V74L48 39M90 74l42-35" fill="none" stroke="#214d82" stroke-width="4"/>`
+    };
+    svg.innerHTML = common + drawings[solid];
+    return svg;
+}
+function topViewAnswer(shape) {
+    const answer = document.createElement("div");
+    answer.className = "solid-topview-answer";
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 120 100");
+    svg.setAttribute("class", "solid-topview-answer-svg");
+    const node = shape === "circle" ? document.createElementNS("http://www.w3.org/2000/svg", "circle") : document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    if (shape === "circle") {
+        node.setAttribute("cx", "60");
+        node.setAttribute("cy", "50");
+        node.setAttribute("r", "39");
+    }
+    else
+        node.setAttribute("points", SHAPE_POINTS[shape]);
+    node.setAttribute("fill", "#6fc8ec");
+    node.setAttribute("stroke", "#23598e");
+    node.setAttribute("stroke-width", "5");
+    node.setAttribute("stroke-linejoin", "round");
+    const shine = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    shine.setAttribute("cx", "45");
+    shine.setAttribute("cy", "35");
+    shine.setAttribute("r", "8");
+    shine.setAttribute("fill", "#dff8ff");
+    shine.setAttribute("opacity", ".8");
+    svg.append(node, shine);
+    const label = document.createElement("span");
+    label.textContent = SHAPE_LABELS[shape];
+    answer.append(svg, label);
+    return answer;
+}
+function makeSolidTopViewQuestion(difficulty) {
+    const rank = { easy: 0, normal: 1, hard: 2 };
+    const pool = TOP_VIEW_SOLIDS.filter((item) => rank[item.minDifficulty] <= rank[difficulty]);
+    const solid = choose(pool);
+    const target = document.createElement("div");
+    target.className = "solid-topview-scene";
+    const observation = document.createElement("span");
+    observation.className = "solid-observation-label";
+    observation.textContent = "관찰할 입체도형 · " + solid.name;
+    const sight = document.createElement("div");
+    sight.className = "solid-sight-line";
+    sight.setAttribute("aria-hidden", "true");
+    target.append(observation, sight, topViewSolidSvg(solid.solid, solid.name));
+    const shapes = Object.keys(SHAPE_LABELS);
+    const distractors = shuffle(shapes.filter((shape) => shape !== solid.answer)).slice(0, 3);
+    const choices = shuffle([solid.answer, ...distractors]).map((shape) => ({
+        visual: topViewAnswer(shape),
+        label: SHAPE_LABELS[shape],
+        correct: shape === solid.answer
+    }));
+    return {
+        kind: "topview",
+        title: "이 입체도형을 위에서 보면?",
+        instruction: "천장에서 수직으로 내려다보았을 때 보이는 바깥 윤곽을 찾아보세요.",
+        target,
+        choices
+    };
+}
 function spaceKindsForGrade(grade) {
     if (grade <= 1)
         return ["shape", "topview", "rotation", "pattern", "mirror"];
@@ -2595,7 +2832,7 @@ function makeSpaceQuestion(index) {
     const kind = kinds[index % kinds.length];
     const difficulty = difficultyForProgress(index / 9);
     if (kind === "shape")
-        return makeShapeQuestion(difficulty);
+        return makeAdvancedShapeQuestion(difficulty);
     if (kind === "rotation")
         return makeRotationQuestion(difficulty);
     if (kind === "blocks")
@@ -2605,7 +2842,7 @@ function makeSpaceQuestion(index) {
     if (kind === "mirror")
         return makeMirrorQuestion(difficulty);
     if (kind === "topview")
-        return makeTopViewQuestion(difficulty);
+        return makeSolidTopViewQuestion(difficulty);
     return makeNetQuestion();
 }
 function stopSpace() {
@@ -2640,13 +2877,13 @@ function nextSpaceQuestion() {
     space.current = makeSpaceQuestion(space.index);
     const labels = { shape: "도형 판별", rotation: "공간 회전", blocks: "쌓기나무", net: "전개도", pattern: "도형 규칙", mirror: "거울 대칭", topview: "위에서 본 모양" };
     const hints = {
-        shape: "크기가 아니라 변의 수와 꼭짓점을 비교해 보세요.",
+        shape: "도형을 돌려도 노란 표식과 빨간 꼭짓점의 상대 위치는 바뀌지 않아요.",
         rotation: "첫 방향부터 화살표를 하나씩 돌려 보세요.",
         blocks: "보이지 않는 아래층 나무까지 함께 세어 보세요.",
         net: "맞닿은 면을 머릿속으로 하나씩 접어 보세요.",
         pattern: "반복되는 모양의 가장 짧은 묶음을 찾아보세요.",
         mirror: "가운데 선에서 같은 거리의 칸을 살펴보세요.",
-        topview: "높이는 잠시 잊고 나무가 놓인 자리만 확인하세요."
+        topview: "입체도형의 가장 높은 곳에서 수직으로 내려다본 바깥 윤곽을 떠올려 보세요."
     };
     byId("spaceKind").textContent = labels[space.current.kind];
     byId("spaceHint").textContent = hints[space.current.kind];
@@ -3495,6 +3732,15 @@ const MINE_STAGES = [
     { rows: 10, columns: 10, mines: 15 },
     { rows: 12, columns: 12, mines: 24 }
 ];
+const MOBILE_MINE_STAGES = [
+    { rows: 6, columns: 6, mines: 6 },
+    { rows: 7, columns: 7, mines: 9 },
+    { rows: 8, columns: 8, mines: 13 }
+];
+function mineStageConfig(stage) {
+    const mobile = window.matchMedia("(max-width: 700px) and (pointer: coarse)").matches;
+    return (mobile ? MOBILE_MINE_STAGES : MINE_STAGES)[stage];
+}
 let mine = null;
 function stopMine() {
     if (!mine)
@@ -3506,7 +3752,9 @@ function stopMine() {
         window.clearTimeout(mine.nextTimer);
 }
 function startMine() {
-    const first = MINE_STAGES[0];
+    const first = mineStageConfig(0);
+    if (!first)
+        return;
     mine = {
         running: true, stage: 0, rows: first.rows, columns: first.columns, mineCount: first.mines,
         flags: 0, revealed: 0, score: 0, started: Date.now(), firstClick: true, markMode: false, cells: [], timer: null, nextTimer: null
@@ -3524,7 +3772,7 @@ function startMine() {
 function setupMineStage(stage) {
     if (!mine)
         return;
-    const config = MINE_STAGES[stage];
+    const config = mineStageConfig(stage);
     if (!config)
         return;
     mine.stage = stage;
@@ -3538,6 +3786,9 @@ function setupMineStage(stage) {
     mine.cells = [];
     const board = byId("mineBoard");
     board.style.setProperty("--mine-cols", String(config.columns));
+    board.setAttribute("aria-rowcount", String(config.rows));
+    board.setAttribute("aria-colcount", String(config.columns));
+    board.dataset.size = String(config.columns);
     board.replaceChildren();
     for (let index = 0; index < config.rows * config.columns; index += 1) {
         const button = document.createElement("button");
@@ -3545,7 +3796,41 @@ function setupMineStage(stage) {
         button.className = "mine-cell";
         button.setAttribute("role", "gridcell");
         button.setAttribute("aria-label", "열지 않은 칸");
-        button.addEventListener("click", () => openMineCell(index));
+        let longPressTimer = null;
+        let longPressHandled = false;
+        const cancelLongPress = () => {
+            if (longPressTimer !== null)
+                window.clearTimeout(longPressTimer);
+            longPressTimer = null;
+            button.classList.remove("touching");
+        };
+        button.addEventListener("pointerdown", (event) => {
+            button.classList.add("touching");
+            if (event.pointerType !== "touch" || mine?.markMode)
+                return;
+            longPressTimer = window.setTimeout(() => {
+                longPressTimer = null;
+                if (!mine?.running)
+                    return;
+                longPressHandled = true;
+                button.classList.remove("touching");
+                toggleMineFlag(index);
+                if (navigator.vibrate)
+                    navigator.vibrate(35);
+            }, 460);
+        });
+        button.addEventListener("pointerup", () => {
+            cancelLongPress();
+            if (longPressHandled)
+                window.setTimeout(() => { longPressHandled = false; }, 0);
+        });
+        button.addEventListener("pointercancel", () => { cancelLongPress(); longPressHandled = false; });
+        button.addEventListener("pointerleave", cancelLongPress);
+        button.addEventListener("click", () => {
+            if (longPressHandled)
+                return;
+            openMineCell(index);
+        });
         button.addEventListener("contextmenu", (event) => {
             event.preventDefault();
             toggleMineFlag(index);
