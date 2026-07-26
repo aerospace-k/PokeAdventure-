@@ -233,6 +233,7 @@
           <button class="quit-button" data-quit="mole" type="button">그만하기</button>
         </div>
         <h2 class="target-title"><b id="moleTarget"></b>의 답을 든 디그다를 찾아요</h2>
+        <div id="moleCelebration" class="mole-celebration" role="status" aria-live="assertive"></div>
         <div id="moleGrid" class="mole-grid"></div>
       </section>
 
@@ -412,8 +413,8 @@
             <p>숫자는 주변 8칸에 숨어 있는 찌리리공 수예요.</p>
             <button id="mineMode" class="mine-mode" type="button" aria-pressed="false">🔎 열기 모드</button>
           </div>
-          <div id="mineBoard" class="mine-board" role="grid" aria-label="찌리리공 찾기 게임판"></div>
-          <p class="mine-tip">컴퓨터: 왼쪽 클릭으로 열기 · 오른쪽 클릭으로 몬스터볼 표시</p>
+          <div class="mine-board-frame"><div id="mineBoard" class="mine-board" role="grid" aria-label="찌리리공 찾기 게임판"></div></div>
+          <p class="mine-tip"><span class="mine-tip-desktop">컴퓨터: 왼쪽 클릭으로 열기 · 오른쪽 클릭으로 몬스터볼 표시</span><span class="mine-tip-mobile">모바일: 짧게 눌러 열기 · 길게 눌러 몬스터볼 표시</span></p>
         </div>
       </section>
 
