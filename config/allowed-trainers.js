@@ -4,7 +4,7 @@
  * 이 파일은 GitHub Pages에서 공개되므로 민감한 개인정보는 넣지 마세요.
  */
 window.POKE_ALLOWED_TRAINER_NAMES = [
-  "점수민",
+  "전수민",
   // "홍길동",
   // "김피카"
 ];
