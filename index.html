@@ -11,7 +11,7 @@
   <link rel="shortcut icon" href="./assets/pokeball-favicon-32.png?v=1.0.20260726.6">
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/pokeball-apple-touch-icon.png?v=1.0.20260726.6">
   <link rel="manifest" href="./site.webmanifest?v=1.0.20260726.6">
-  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260726.21">
+  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260726.31">
 </head>
 <body>
   <div id="bgDeco" class="bg-deco" aria-hidden="true"></div>
@@ -79,7 +79,6 @@
           <div class="side-more-panel">
             <div class="side-more-head"><strong>추가 메뉴</strong><button id="closeMoreMenu" type="button" aria-label="더보기 메뉴 닫기">닫기 ×</button></div>
             <button class="nav-button" data-nav="report" type="button">학습 리포트</button>
-            <button class="nav-button" data-nav="leaderboard" type="button">트레이너 순위표</button>
             <button class="nav-button" data-nav="records" type="button">나의 기록</button>
             <button class="nav-button" data-nav="help" type="button">도움말</button>
             <button class="nav-button" data-nav="about" type="button">정보</button>
@@ -190,6 +189,11 @@
           <article class="problem-card">
             <div id="quizMascot" class="problem-mascot"></div>
             <div id="quizDots" class="quiz-dots"></div>
+            <div class="quiz-charge" aria-label="피카츄 전기 충전">
+              <span>전기 충전</span>
+              <div class="quiz-charge-track"><i id="quizChargeBar"></i></div>
+              <b id="quizChargeText">0 / 5</b>
+            </div>
             <p id="quizStreak" class="streak"></p>
             <div id="quizProblem" class="problem-text"></div>
             <div id="quizAnswer" class="answer-display">?</div>
@@ -253,6 +257,11 @@
             <div id="oxPsyduck" class="ox-mascot thinking"></div>
             <p id="oxReaction">고라파덕도 고민 중...</p>
           </div>
+          <div class="ox-boost" aria-label="고라파덕 판단 게이지">
+            <span>판단 게이지</span>
+            <div class="ox-boost-track"><i id="oxBoostBar"></i></div>
+            <b id="oxBoostText">0 / 5</b>
+          </div>
           <div class="ox-buttons">
             <button class="ox-button yes" data-ox="true" type="button">O 맞아요</button>
             <button class="ox-button no" data-ox="false" type="button">X 아니에요</button>
@@ -266,6 +275,7 @@
           <span>시간 <b id="balloonTime">60</b>초</span>
           <span>연속 <b id="balloonCombo">0</b></span>
           <span>속도 <b id="balloonSpeed">1.0</b>x</span>
+          <span class="balloon-fever-chip">노래 <b id="balloonFever">0 / 8</b></span>
           <button class="quit-button" data-quit="balloon" type="button">그만하기</button>
         </div>
         <h2 class="target-title"><b id="balloonTarget"></b>의 정답 풍선을 터뜨려요</h2>
@@ -426,23 +436,17 @@
         </article>
       </section>
 
-      <section id="screen-leaderboard" class="screen">
-        <div class="screen-heading">
-          <div><span class="eyebrow">POKÉMON LEAGUE</span><h2>트레이너 순위표</h2><p>친구들과 모은 별과 최고 점수를 비교해요.</p></div>
-          <div class="ranking-tools"><span class="ranking-live">LIVE</span><select id="rankingMode" class="ranking-select" aria-label="순위표 게임 선택"><option value="all">전체 성장 순위</option></select><button id="rankingRefresh" class="ranking-refresh" type="button" aria-label="공용 순위표 새로고침">↻ 새로고침</button></div>
-        </div>
-        <p id="rankingNote" class="ranking-note" aria-live="polite">공용 순위표 연결 상태를 확인하고 있어요.</p>
-        <div id="rankingSummary" class="ranking-summary" aria-label="순위표 요약"></div>
-        <div id="rankingPodium" class="ranking-podium"></div>
-        <div id="rankingTable" class="ranking-table"></div>
-      </section>
-
       <section id="screen-records" class="screen">
         <div class="screen-heading">
-          <div><span class="eyebrow">HISTORY</span><h2>나의 기록</h2></div>
+          <div><span class="eyebrow">PERSONAL TRAINER LOG</span><h2>나의 성장 기록</h2><p>이 기기의 브라우저에 안전하게 보관된 나만의 모험 기록이에요.</p></div>
           <button id="clearRecords" class="ghost-button" type="button">기록 지우기</button>
         </div>
+        <div class="local-record-notice"><span aria-hidden="true">●</span><strong>개인 기록</strong><p>다른 사람과 공유되지 않으며 현재 기기에서만 확인할 수 있어요.</p></div>
         <div id="recordSummary" class="record-summary"></div>
+        <div id="recordHighlights" class="record-highlights" aria-label="성장 하이라이트"></div>
+        <div class="record-section-heading"><div><span class="eyebrow">GAME PROGRESS</span><h3>게임별 성장</h3></div><small>각 게임의 최고 점수와 모은 별을 확인해요.</small></div>
+        <div id="recordModeGrid" class="record-mode-grid"></div>
+        <div class="record-section-heading recent"><div><span class="eyebrow">RECENT ADVENTURES</span><h3>최근 모험</h3></div></div>
         <div id="recordTable" class="record-table"></div>
       </section>
 
@@ -471,7 +475,6 @@
 
   <noscript>이 게임은 JavaScript를 켜야 실행할 수 있습니다.</noscript>
   <script src="./config/allowed-trainers.js"></script>
-  <script src="./config/leaderboard-config.js"></script>
-  <script defer src="./dist/main.js?v=1.0.20260726.21"></script>
+  <script defer src="./dist/main.js?v=1.0.20260726.31"></script>
 </body>
 </html>
