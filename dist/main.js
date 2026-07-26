@@ -242,10 +242,10 @@ function clearAccessMessage() {
     input.removeAttribute("aria-invalid");
     byId("accessMessage").textContent = "";
 }
-function showAccessDenied() {
+function showAccessDenied(message = "접속할 수 없습니다.") {
     const input = byId("nameInput");
     input.setAttribute("aria-invalid", "true");
-    byId("accessMessage").textContent = "접속할 수 없습니다.";
+    byId("accessMessage").textContent = message;
     input.focus();
     input.select();
 }
@@ -3155,6 +3155,7 @@ function openAbout() {
     showScreen("about");
 }
 let avatarChanging = false;
+let nameChanging = false;
 function showAvatarPicker(changing) {
     avatarChanging = changing;
     byId("introStage").classList.add("hidden-panel");
@@ -3192,10 +3193,13 @@ function closeAvatarPicker() {
     updateSideInfo();
     buildGradeHero();
 }
-function showNameForm() {
+function showNameForm(changing = false) {
+    nameChanging = changing;
     byId("introStage").classList.add("hidden-panel");
     byId("avatarPick").classList.add("hidden-panel");
     byId("nameEntry").classList.remove("hidden-panel");
+    byId("nameEntryLabel").textContent = changing ? "변경할 이름을 알려주세요" : "이름을 알려주세요";
+    byId("cancelNameChange").classList.toggle("hidden-panel", !changing);
     byId("nameInput").value = getName();
     clearAccessMessage();
     byId("nameInput").focus();
@@ -3204,7 +3208,7 @@ function enterApp() {
     if (!isAllowedTrainerName(getName())) {
         byId("app").classList.add("hidden-panel");
         byId("introOverlay").classList.remove("hidden-panel");
-        showNameForm();
+        showNameForm(false);
         showAccessDenied();
         return;
     }
@@ -3277,16 +3281,17 @@ function bindEvents() {
                 showAvatarPicker(false);
         }
         else
-            showNameForm();
+            showNameForm(false);
     });
     byId("nameEntry").addEventListener("submit", (event) => {
         event.preventDefault();
         const enteredName = byId("nameInput").value;
         if (!isAllowedTrainerName(enteredName)) {
-            showAccessDenied();
+            showAccessDenied(nameChanging ? "허용되지 않은 이름이라 변경할 수 없습니다." : "접속할 수 없습니다.");
             return;
         }
         clearAccessMessage();
+        nameChanging = false;
         setName(enteredName);
         if (hasSavedAvatar())
             enterApp();
@@ -3294,6 +3299,15 @@ function bindEvents() {
             showAvatarPicker(false);
     });
     byId("nameInput").addEventListener("input", clearAccessMessage);
+    byId("cancelNameChange").addEventListener("click", () => {
+        nameChanging = false;
+        clearAccessMessage();
+        byId("nameEntry").classList.add("hidden-panel");
+        byId("introOverlay").classList.add("hidden-panel");
+        byId("app").classList.remove("hidden-panel");
+        updateSideInfo();
+        openDashboard();
+    });
     byId("playerCard").addEventListener("click", () => {
         cleanupGame();
         byId("app").classList.add("hidden-panel");
@@ -3305,7 +3319,7 @@ function bindEvents() {
         cleanupGame();
         byId("app").classList.add("hidden-panel");
         byId("introOverlay").classList.remove("hidden-panel");
-        showNameForm();
+        showNameForm(true);
     });
     document.querySelectorAll("[data-nav]").forEach((button) => {
         button.addEventListener("click", () => {
