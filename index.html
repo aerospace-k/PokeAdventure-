@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>포켓몬 배움 탐험대</title>
+  <link rel="icon" type="image/svg+xml" href="./assets/pokeball-favicon.svg">
   <link rel="stylesheet" href="./dist/styles.css">
 </head>
 <body>
@@ -69,7 +70,9 @@
         <button class="nav-button" data-nav="pokedex" type="button">나의 도감</button>
         <details id="sideMoreMenu" class="side-more">
           <summary>더보기</summary>
+          <button id="moreMenuBackdrop" class="side-more-backdrop" type="button" aria-label="더보기 메뉴 닫기"></button>
           <div class="side-more-panel">
+            <div class="side-more-head"><strong>추가 메뉴</strong><button id="closeMoreMenu" type="button" aria-label="더보기 메뉴 닫기">닫기 ×</button></div>
             <button class="nav-button" data-nav="report" type="button">학습 리포트</button>
             <button class="nav-button" data-nav="leaderboard" type="button">트레이너 순위표</button>
             <button class="nav-button" data-nav="records" type="button">나의 기록</button>
@@ -105,6 +108,7 @@
           <button id="dashboardToday" class="center-action" type="button"><b>오늘의 탐험</b><span>세 가지 일일 임무</span></button>
           <button id="dashboardDex" class="center-action" type="button"><b>나의 도감</b><span>발견한 포켓몬 확인</span></button>
         </div>
+        <article id="dashboardLevelJourney" class="level-journey" aria-label="트레이너 성장 현황"></article>
         <div class="center-panels">
           <article class="center-panel"><h3>트레이너 현황</h3><div id="dashboardStats" class="center-stats"></div></article>
           <article class="center-panel"><h3>최근 모험</h3><div id="dashboardRecent" class="center-recent"></div></article>
@@ -403,6 +407,7 @@
             <span id="resultStars" class="result-stars"></span>
             <h2 id="resultTitle"></h2>
             <p id="resultSpeech"></p>
+            <div id="resultReward" class="result-reward hidden-panel" aria-live="polite"></div>
             <div id="resultStats" class="result-stats"></div>
             <div class="result-actions">
               <button class="primary-button" data-action="retry" type="button">다시 도전</button>
