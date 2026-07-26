@@ -11,7 +11,7 @@
   <link rel="shortcut icon" href="./assets/pokeball-favicon-32.png?v=1.0.20260726.6">
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/pokeball-apple-touch-icon.png?v=1.0.20260726.6">
   <link rel="manifest" href="./site.webmanifest?v=1.0.20260726.6">
-  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260726.5">
+  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260726.21">
 </head>
 <body>
   <div id="bgDeco" class="bg-deco" aria-hidden="true"></div>
@@ -282,11 +282,14 @@
         </div>
         <div class="space-layout">
           <article class="space-question-card">
-            <div id="spaceTrainer" class="trainer-cameo"></div>
             <span id="spaceKind" class="space-kind"></span>
             <h2 id="spaceTitle"></h2>
             <p id="spaceInstruction"></p>
             <div id="spaceTarget" class="space-target"></div>
+            <aside class="space-guide" aria-label="나몰빼미의 관찰 팁">
+              <div id="spaceTrainer" class="trainer-cameo"></div>
+              <p><strong>나몰빼미의 관찰 팁</strong><span id="spaceHint">모양을 천천히 살펴보세요.</span></p>
+            </aside>
             <p id="spaceFeedback" class="feedback" aria-live="polite"></p>
           </article>
           <div id="spaceChoices" class="space-choices"></div>
@@ -341,12 +344,12 @@
       <section id="screen-snack" class="screen game-screen">
         <div class="hud">
           <span>점수 <b id="snackScore">0</b></span><span>시간 <b id="snackTime">60</b>초</span>
-          <span>연속 <b id="snackCombo">0</b></span><span>속도 <b id="snackSpeed">1.0</b>x</span>
+          <span>연속 <b id="snackCombo">0</b></span><span>체력 <b id="snackLives">♥♥♥</b></span><span>속도 <b id="snackSpeed">1.0</b>x</span>
           <button class="quit-button" data-quit="snack" type="button">그만하기</button>
         </div>
         <div class="snack-layout">
           <div id="snackField" class="snack-field" aria-label="잠만보 열매 캐치 게임"><div class="snack-clouds" aria-hidden="true"></div><div id="snackPlayer" class="snack-player"></div></div>
-          <aside class="snack-controls"><h2>잠만보 열매 캐치</h2><p>열매는 받고 바위는 피해요! 화면을 누르거나 버튼으로 이동할 수 있어요.</p><div class="snack-move-buttons"><button data-snack-move="left" type="button">◀ 왼쪽</button><button data-snack-move="right" type="button">오른쪽 ▶</button></div><div class="snack-legend"><span>🍎 +100</span><span>✨ +300</span><span>🪨 조심!</span></div></aside>
+          <aside class="snack-controls"><span class="snack-route">BERRY FOREST</span><h2>잠만보 베리 대모험</h2><p>나무열매를 모아 10콤보 피버를 만들고, 바위는 피해요!</p><div class="snack-fever"><span>피버 게이지</span><div><i id="snackFeverBar"></i></div><b id="snackFeverText">0/10</b></div><div class="snack-move-buttons"><button data-snack-move="left" type="button">◀ 왼쪽</button><button data-snack-move="right" type="button">오른쪽 ▶</button></div><div class="snack-legend"><span>나무열매 +100</span><span>이상한사탕 +300</span><span>회복약 체력 +1</span><span>딱딱한돌 조심!</span></div></aside>
         </div>
       </section>
 
@@ -425,10 +428,11 @@
 
       <section id="screen-leaderboard" class="screen">
         <div class="screen-heading">
-          <div><span class="eyebrow">TRAINER RANKING</span><h2>트레이너 순위표</h2></div>
-          <select id="rankingMode" class="ranking-select" aria-label="순위표 게임 선택"><option value="all">전체 성장 순위</option></select>
+          <div><span class="eyebrow">POKÉMON LEAGUE</span><h2>트레이너 순위표</h2><p>친구들과 모은 별과 최고 점수를 비교해요.</p></div>
+          <div class="ranking-tools"><span class="ranking-live">LIVE</span><select id="rankingMode" class="ranking-select" aria-label="순위표 게임 선택"><option value="all">전체 성장 순위</option></select><button id="rankingRefresh" class="ranking-refresh" type="button" aria-label="공용 순위표 새로고침">↻ 새로고침</button></div>
         </div>
-        <p class="ranking-note">이 브라우저에 저장된 플레이어 이름별 기록을 비교하는 로컬 순위표예요.</p>
+        <p id="rankingNote" class="ranking-note" aria-live="polite">공용 순위표 연결 상태를 확인하고 있어요.</p>
+        <div id="rankingSummary" class="ranking-summary" aria-label="순위표 요약"></div>
         <div id="rankingPodium" class="ranking-podium"></div>
         <div id="rankingTable" class="ranking-table"></div>
       </section>
@@ -467,6 +471,7 @@
 
   <noscript>이 게임은 JavaScript를 켜야 실행할 수 있습니다.</noscript>
   <script src="./config/allowed-trainers.js"></script>
-  <script defer src="./dist/main.js?v=1.0.20260726.5"></script>
+  <script src="./config/leaderboard-config.js"></script>
+  <script defer src="./dist/main.js?v=1.0.20260726.21"></script>
 </body>
 </html>
