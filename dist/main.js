@@ -3321,6 +3321,7 @@ let avatarChanging = false;
 let nameChanging = false;
 function showAvatarPicker(changing) {
     avatarChanging = changing;
+    byId("avatarCountText").textContent = "진화형을 제외한 인기 포켓몬 " + POKEMON.length + "종";
     byId("introStage").classList.add("hidden-panel");
     byId("nameEntry").classList.add("hidden-panel");
     byId("avatarPick").classList.remove("hidden-panel");
