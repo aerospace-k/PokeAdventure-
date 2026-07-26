@@ -32,7 +32,6 @@ const MODE_MASCOTS = {
     quiz: 25, rain: 131, mole: 50, memory: 132, ox: 54, balloon: 39, space: 137, mine: 100, knowledge: 151,
     symmetry: 132, coordinate: 137, history: 251, safety: 54, snack: 143
 };
-const GRADE_MASCOTS = [133, 25, 7, 4, 1, 143, 151];
 const GRADES = [
     { name: "유치원", description: "10 이내 더하기와 빼기" },
     { name: "1학년", description: "한 자리 수와 20 이내 계산" },
@@ -321,24 +320,14 @@ function saveRecord(entry) {
     updateSideInfo();
     void uploadSharedRecords([entry]);
 }
-function sharedLeaderboardConfig() {
-    const config = window.POKE_LEADERBOARD_CONFIG;
+function leaderboardServerConfig() {
+    const config = window.POKE_LEADERBOARD_SERVER;
     if (!config?.enabled)
         return null;
-    const supabaseUrl = String(config.supabaseUrl ?? "").trim().replace(/\/$/, "");
-    const publishableKey = String(config.publishableKey ?? "").trim();
-    const table = String(config.table ?? "trainer_scores").trim();
-    if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(supabaseUrl) || publishableKey.length < 20 || !/^[a-z0-9_]+$/i.test(table))
+    const apiUrl = String(config.apiUrl ?? "").trim().replace(/\/$/, "");
+    if (!/^https?:\/\//i.test(apiUrl))
         return null;
-    return { supabaseUrl, publishableKey, table };
-}
-function sharedHeaders(config, json = false) {
-    const headers = { apikey: config.publishableKey };
-    if (config.publishableKey.split(".").length === 3)
-        headers.Authorization = "Bearer " + config.publishableKey;
-    if (json)
-        headers["Content-Type"] = "application/json";
-    return headers;
+    return { apiUrl };
 }
 function sharedRecordKey(entry) {
     const source = [normalizeAccessName(entry.name), entry.mode, entry.grade, entry.score, entry.stars, Math.floor(entry.timestamp)].join("|");
@@ -348,20 +337,20 @@ function sharedRecordKey(entry) {
     return "record-" + (hash >>> 0).toString(36) + "-" + Math.floor(entry.timestamp).toString(36);
 }
 async function uploadSharedRecords(entries) {
-    const config = sharedLeaderboardConfig();
+    const config = leaderboardServerConfig();
     if (!config || !entries.length)
         return false;
     const oldestAllowed = Date.now() - 29 * 86400000;
     const rows = entries.filter((entry) => entry.timestamp >= oldestAllowed).map((entry) => ({
-        record_key: sharedRecordKey(entry), trainer_name: entry.name.trim().slice(0, 20), mode: entry.mode, grade: entry.grade,
-        difficulty: entry.diff, score: Math.max(0, Math.min(10000000, Math.floor(entry.score))), stars: Math.max(0, Math.min(3, Math.floor(entry.stars))),
-        detail: entry.detail.slice(0, 100), played_at: new Date(entry.timestamp).toISOString()
+        recordKey: sharedRecordKey(entry), name: entry.name.trim().slice(0, 20), mode: entry.mode, grade: entry.grade,
+        diff: entry.diff, score: Math.max(0, Math.min(10000000, Math.floor(entry.score))), stars: Math.max(0, Math.min(3, Math.floor(entry.stars))),
+        detail: entry.detail.slice(0, 100), timestamp: Math.floor(entry.timestamp)
     }));
     if (!rows.length)
         return false;
     try {
-        const response = await fetch(config.supabaseUrl + "/rest/v1/" + config.table + "?on_conflict=record_key", {
-            method: "POST", headers: { ...sharedHeaders(config, true), Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify(rows)
+        const response = await fetch(config.apiUrl + "/leaderboard", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ records: rows })
         });
         return response.ok;
     }
@@ -370,24 +359,25 @@ async function uploadSharedRecords(entries) {
     }
 }
 async function readSharedRecords(mode) {
-    const config = sharedLeaderboardConfig();
+    const config = leaderboardServerConfig();
     if (!config)
         return [];
-    const params = new URLSearchParams({ select: "trainer_name,mode,grade,difficulty,score,stars,detail,played_at", order: "played_at.desc", limit: "1000" });
+    const params = new URLSearchParams({ limit: "1000" });
     if (mode !== null)
-        params.set("mode", "eq." + mode);
-    const response = await fetch(config.supabaseUrl + "/rest/v1/" + config.table + "?" + params.toString(), { headers: sharedHeaders(config) });
+        params.set("mode", mode);
+    const response = await fetch(config.apiUrl + "/leaderboard?" + params.toString());
     if (!response.ok)
         throw new Error("Shared leaderboard request failed");
-    const rows = await response.json();
+    const payload = await response.json();
+    const rows = payload && typeof payload === "object" && "records" in payload ? payload.records : [];
     if (!Array.isArray(rows))
         return [];
-    return rows.filter((row) => typeof row.trainer_name === "string" && typeof row.mode === "string" && row.mode in MODES
-        && Number.isFinite(Number(row.grade)) && ["easy", "normal", "hard"].includes(String(row.difficulty))
+    return rows.filter((row) => typeof row.name === "string" && typeof row.mode === "string" && row.mode in MODES
+        && Number.isFinite(Number(row.grade)) && ["easy", "normal", "hard"].includes(String(row.diff))
         && Number.isFinite(Number(row.score)) && Number.isFinite(Number(row.stars)) && typeof row.detail === "string"
-        && Number.isFinite(Date.parse(String(row.played_at)))).map((row) => ({
-        name: String(row.trainer_name).slice(0, 20), mode: String(row.mode), grade: Number(row.grade), diff: String(row.difficulty),
-        score: Number(row.score), stars: Number(row.stars), detail: String(row.detail).slice(0, 100), timestamp: Date.parse(String(row.played_at))
+        && Number.isFinite(Number(row.timestamp))).map((row) => ({
+        name: String(row.name).slice(0, 20), mode: String(row.mode), grade: Number(row.grade), diff: String(row.diff),
+        score: Number(row.score), stars: Number(row.stars), detail: String(row.detail).slice(0, 100), timestamp: Number(row.timestamp)
     }));
 }
 function getLifetimeStars() {
@@ -772,8 +762,42 @@ function openGrades() {
         ["#ff8ebf", "#e5538e"], ["#ff7b72", "#d64a55"], ["#f6a94b", "#db7734"],
         ["#e8bd35", "#c18d16"], ["#37bd7d", "#16855b"], ["#438fff", "#2865c1"], ["#8b6fe8", "#6549bf"]
     ];
+    const gradeBalls = [
+        { sprite: "poke-ball", name: "몬스터볼", tier: "starter" },
+        { sprite: "poke-ball", name: "몬스터볼", tier: "starter" },
+        { sprite: "great-ball", name: "슈퍼볼", tier: "great" },
+        { sprite: "ultra-ball", name: "하이퍼볼", tier: "ultra" },
+        { sprite: "ultra-ball", name: "하이퍼볼", tier: "ultra" },
+        { sprite: "master-ball", name: "마스터볼", tier: "master" },
+        { sprite: "master-ball", name: "마스터볼", tier: "master" }
+    ];
+    const requestedGradeBalls = [
+        { sprite: "poke-ball", name: "몬스터볼", tier: "starter" },
+        { sprite: "great-ball", name: "슈퍼볼", tier: "great" },
+        { sprite: "ultra-ball", name: "하이퍼볼", tier: "ultra" },
+        { sprite: "master-ball", name: "마스터볼", tier: "master" },
+        { sprite: "safari-ball", name: "사파리볼", tier: "safari" },
+        { sprite: "luxury-ball", name: "럭셔리볼", tier: "luxury" },
+        { sprite: "beast-ball", name: "울트라볼", tier: "beast" }
+    ];
     GRADES.forEach((grade, index) => {
-        grid.append(cardButton(grade.name, grade.description, colors[index], () => selectGrade(index), GRADE_MASCOTS[index]));
+        const ball = requestedGradeBalls[index];
+        const card = cardButton(grade.name, grade.description, colors[index], () => selectGrade(index));
+        card.classList.add("grade-ball-card");
+        card.dataset.ballTier = ball.tier;
+        const media = document.createElement("div");
+        media.className = "grade-ball-media";
+        const image = document.createElement("img");
+        image.className = "grade-ball-image";
+        image.src = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/" + ball.sprite + ".png";
+        image.alt = ball.name;
+        image.loading = "eager";
+        const label = document.createElement("small");
+        label.className = "grade-ball-name";
+        label.textContent = ball.name;
+        media.append(image, label);
+        card.append(media);
+        grid.append(card);
     });
     byId("gradeTip").textContent = "도움말: " + choose(TIPS);
     showScreen("grade");
@@ -1252,7 +1276,7 @@ function stopQuiz() {
 }
 function startQuiz() {
     quiz = { index: 0, score: 0, correct: 0, streak: 0, best: 0, input: "", locked: false, started: Date.now(), questionStarted: Date.now(), current: null, choiceMode: false, results: [], timer: null };
-    replaceWithPokemon(byId("quizMascot"), getAvatarId());
+    replaceWithPokemon(byId("quizMascot"), 25);
     showScreen("quiz");
     quiz.timer = window.setInterval(updateQuizTimer, 500);
     nextQuizQuestion();
@@ -1294,6 +1318,7 @@ function nextQuizQuestion() {
     quiz.locked = false;
     quiz.choiceMode = Math.random() < (state.grade !== null && state.grade <= 2 ? .6 : .45);
     quiz.questionStarted = Date.now();
+    renderQuizCharge();
     byId("quizProblem").textContent = quiz.current.display + " = ?";
     byId("quizAnswer").textContent = "?";
     byId("quizAnswer").className = "answer-display";
@@ -1336,6 +1361,14 @@ function nextQuizQuestion() {
         }));
     }
 }
+function renderQuizCharge() {
+    if (!quiz)
+        return;
+    const charge = Math.min(5, quiz.streak);
+    byId("quizChargeBar").style.width = `${charge * 20}%`;
+    byId("quizChargeText").textContent = charge >= 5 ? "MAX!" : `${charge} / 5`;
+    document.querySelector("#screen-quiz .problem-card")?.classList.toggle("charged", charge >= 5);
+}
 function answerQuiz(value, selected) {
     if (!quiz || quiz.locked || !quiz.current)
         return;
@@ -1348,6 +1381,12 @@ function answerQuiz(value, selected) {
         quiz.score += gained;
         quiz.correct += 1;
         quiz.streak += 1;
+        if (quiz.streak === 5) {
+            quiz.score += 200;
+            pokemonSparkBurst(25);
+            playPokemonCry(25);
+        }
+        renderQuizCharge();
         quiz.best = Math.max(quiz.best, quiz.streak);
         quiz.results[quiz.index] = "c";
         answer.classList.add("correct");
@@ -1921,24 +1960,47 @@ function nextOx() {
     byId("oxProblem").textContent = problem.display + " = " + shown;
     byId("oxPsyduck").className = "ox-mascot thinking";
     byId("oxReaction").textContent = "고라파덕도 고민 중...";
+    renderOxBoost();
 }
 function reactOx(correct) {
     byId("oxPsyduck").className = "ox-mascot " + (correct ? "happy" : "confused");
     byId("oxReaction").textContent = correct ? "정답이야! 정말 멋져!" : "앗, 다시 생각해 보자!";
+    const screen = byId("screen-ox");
+    screen.classList.remove("correct-flash", "wrong-flash");
+    void screen.offsetWidth;
+    screen.classList.add(correct ? "correct-flash" : "wrong-flash");
+}
+function renderOxBoost() {
+    if (!ox)
+        return;
+    const remainder = ox.combo % 5;
+    const ready = ox.combo > 0 && remainder === 0;
+    const value = ready ? 5 : remainder;
+    byId("oxBoostBar").style.width = `${value * 20}%`;
+    byId("oxBoostText").textContent = ready ? "보너스!" : `${value} / 5`;
+    document.querySelector("#screen-ox .ox-boost")?.classList.toggle("ready", ready);
 }
 function answerOx(answer) {
     if (!ox?.running || ox.nextTimer !== null)
         return;
     if (answer === ox.current.truth) {
-        ox.score += 100 + ox.combo * 10;
         ox.combo += 1;
+        const boost = ox.combo % 5 === 0;
+        ox.score += 100 + (ox.combo - 1) * 10 + (boost ? 250 : 0);
         ox.best = Math.max(ox.best, ox.combo);
         ox.correct += 1;
         reactOx(true);
+        renderOxBoost();
+        if (boost) {
+            byId("oxReaction").textContent = "판단 게이지 완성! 고라파덕 보너스 +250";
+            pokemonSparkBurst(54);
+            playPokemonCry(54);
+        }
         correctSound();
     }
     else {
         ox.combo = 0;
+        renderOxBoost();
         ox.time = Math.max(0, ox.time - 3);
         reactOx(false);
         wrongSound();
@@ -1988,6 +2050,8 @@ function stopBalloon() {
 function startBalloon() {
     balloon = { running: true, score: 0, combo: 0, best: 0, popped: 0, time: 60, target: newProblem("easy"), items: [], started: performance.now(), lastFrame: performance.now(), lastSpawn: performance.now() - 2000, raf: 0, countdown: null };
     byId("balloonField").replaceChildren();
+    byId("balloonFever").textContent = "0 / 8";
+    byId("balloonField").classList.remove("fever");
     renderBalloonHud();
     showScreen("balloon");
     balloon.countdown = window.setInterval(() => {
@@ -2035,9 +2099,10 @@ function spawnBalloon() {
     const correct = Math.random() < .42;
     const wrong = choicesFor(balloon.target.answer).filter((value) => value !== balloon?.target.answer);
     const value = correct ? balloon.target.answer : choose(wrong);
+    const bonus = correct && Math.random() < .09;
     const element = document.createElement("button");
     element.type = "button";
-    element.className = "balloon";
+    element.className = `balloon${bonus ? " bonus" : ""}`;
     element.style.setProperty("--balloon-accent", choose(["#ff6b7d", "#f39a4b", "#438fff", "#24b47e", "#8b6fe8", "#2ba9c9"]));
     const artwork = pokemonMedia({ id: 39, name: "푸린" }, "balloon-pokemon");
     artwork.setAttribute("aria-hidden", "true");
@@ -2048,7 +2113,7 @@ function spawnBalloon() {
     element.append(artwork, number);
     element.style.left = randomInt(55, Math.max(60, field.clientWidth - 55)) + "px";
     element.style.top = field.clientHeight + "px";
-    const item = { element, value, y: field.clientHeight };
+    const item = { element, value, y: field.clientHeight, bonus };
     element.addEventListener("click", () => popBalloon(item));
     field.append(element);
     balloon.items.push(item);
@@ -2059,12 +2124,25 @@ function popBalloon(item) {
     const index = balloon.items.indexOf(item);
     if (index < 0)
         return;
-    if (item.value === balloon.target.answer) {
+    const correctHit = item.value === balloon.target.answer;
+    if (!correctHit) {
+        byId("balloonFever").textContent = "0 / 8";
+        byId("balloonField").classList.remove("fever");
+    }
+    if (correctHit) {
+        balloonNoteBurst(item.element, item.bonus);
         balloon.items.splice(index, 1);
         item.element.classList.add("pop");
         window.setTimeout(() => item.element.remove(), 250);
-        balloon.score += 100 + balloon.combo * 10;
-        balloon.combo += 1;
+        const nextCombo = balloon.combo + 1;
+        const fever = nextCombo >= 8;
+        const baseScore = item.bonus ? 400 : 100;
+        balloon.score += (baseScore + balloon.combo * 10) * (fever ? 2 : 1);
+        balloon.combo = nextCombo;
+        byId("balloonFever").textContent = fever ? "FEVER x2" : `${nextCombo} / 8`;
+        byId("balloonField").classList.toggle("fever", fever);
+        if (item.bonus)
+            playPokemonCry(39);
         balloon.best = Math.max(balloon.best, balloon.combo);
         balloon.popped += 1;
         balloon.target = newProblem(difficultyForElapsed(balloon.started, 60));
@@ -2075,6 +2153,23 @@ function popBalloon(item) {
         wrongSound();
     }
     renderBalloonHud();
+}
+function balloonNoteBurst(origin, bonus) {
+    const field = byId("balloonField");
+    const fieldRect = field.getBoundingClientRect();
+    const rect = origin.getBoundingClientRect();
+    for (let index = 0; index < (bonus ? 9 : 5); index += 1) {
+        const note = document.createElement("span");
+        note.className = "balloon-note";
+        note.textContent = index % 2 ? "♪" : "♫";
+        note.style.left = `${rect.left - fieldRect.left + rect.width / 2}px`;
+        note.style.top = `${rect.top - fieldRect.top + rect.height / 2}px`;
+        note.style.setProperty("--note-x", `${(Math.random() - .5) * 150}px`);
+        note.style.setProperty("--note-y", `${-55 - Math.random() * 120}px`);
+        note.style.color = bonus ? "#f4b400" : ["#ef476f", "#4d8dff", "#8b5cf6"][index % 3];
+        field.append(note);
+        window.setTimeout(() => note.remove(), 850);
+    }
 }
 function renderBalloonHud() {
     if (!balloon)
@@ -3547,7 +3642,59 @@ function openRecords() {
     const best = records.reduce((value, record) => Math.max(value, record.score), 0);
     const stars = getLifetimeStars();
     const summary = byId("recordSummary");
-    summary.replaceChildren(heroStat(String(records.length), "플레이"), heroStat(String(best), "최고 점수"), heroStat(String(stars), "별"));
+    const playedModes = new Set(records.map((record) => record.mode)).size;
+    summary.replaceChildren(heroStat(String(records.length), "총 플레이"), heroStat(String(best), "최고 점수"), heroStat(String(stars), "모은 별"), heroStat(String(playedModes), "도전한 게임"));
+    const highlights = byId("recordHighlights");
+    const modeGrid = byId("recordModeGrid");
+    highlights.replaceChildren();
+    modeGrid.replaceChildren();
+    if (records.length) {
+        const latest = records.reduce((a, b) => a.timestamp > b.timestamp ? a : b);
+        const personalBest = records.reduce((a, b) => a.score >= b.score ? a : b);
+        const makeHighlight = (label, value, detail, kind) => {
+            const card = document.createElement("article");
+            card.className = `record-highlight ${kind}`;
+            const eyebrow = document.createElement("span");
+            eyebrow.textContent = label;
+            const strong = document.createElement("strong");
+            strong.textContent = value;
+            const paragraph = document.createElement("p");
+            paragraph.textContent = detail;
+            card.append(eyebrow, strong, paragraph);
+            return card;
+        };
+        const nextGoal = Math.max(5, Math.ceil((stars + 1) / 5) * 5);
+        highlights.append(makeHighlight("개인 최고", personalBest.score + "점", MODES[personalBest.mode].name, "best"), makeHighlight("최근 모험", MODES[latest.mode].name, new Date(latest.timestamp).toLocaleDateString("ko-KR"), "latest"), makeHighlight("다음 성장 목표", nextGoal + "개 별", "앞으로 " + (nextGoal - stars) + "개 더 모으면 달성!", "goal"));
+        const grouped = new Map();
+        records.forEach((record) => grouped.set(record.mode, [...(grouped.get(record.mode) ?? []), record]));
+        Array.from(grouped.entries()).sort((a, b) => b[1].length - a[1].length).forEach(([mode, items]) => {
+            const meta = MODES[mode];
+            if (!meta)
+                return;
+            const card = document.createElement("article");
+            card.className = "record-mode-card";
+            const media = pokemonMedia({ id: MODE_MASCOTS[mode], name: meta.name }, "record-mode-pokemon");
+            const copy = document.createElement("div");
+            const title = document.createElement("strong");
+            title.textContent = meta.name;
+            const category = document.createElement("small");
+            category.textContent = meta.category;
+            copy.append(title, category);
+            const modeBest = Math.max(...items.map((item) => item.score));
+            const modeStars = items.reduce((total, item) => total + item.stars, 0);
+            const stats = document.createElement("div");
+            stats.className = "record-mode-stats";
+            stats.innerHTML = `<span><b>${items.length}</b>회 플레이</span><span><b>${modeBest}</b>최고 점수</span><span><b>★ ${modeStars}</b>모은 별</span>`;
+            card.append(media, copy, stats);
+            modeGrid.append(card);
+        });
+    }
+    else {
+        const guide = document.createElement("article");
+        guide.className = "record-empty-guide";
+        guide.innerHTML = "<strong>첫 모험을 시작해 보세요!</strong><p>게임을 완료하면 최고 점수와 별이 이곳에 자동으로 기록돼요.</p>";
+        highlights.append(guide);
+    }
     const wrapper = byId("recordTable");
     wrapper.replaceChildren();
     if (!records.length) {
@@ -3691,7 +3838,7 @@ async function renderLeaderboard() {
     const mode = value === "all" ? null : value;
     const note = byId("rankingNote");
     paintLeaderboard(rankingRows(mode), mode);
-    if (!sharedLeaderboardConfig()) {
+    if (!leaderboardServerConfig()) {
         note.textContent = "공용 순위표 설정 전이에요. 현재는 이 브라우저의 기록을 표시합니다.";
         refresh.disabled = false;
         refresh.classList.remove("loading");
@@ -3946,8 +4093,6 @@ function bindEvents() {
                 openPokedex();
             if (nav === "report")
                 openReport();
-            if (nav === "leaderboard")
-                openLeaderboard();
             if (nav === "records")
                 openRecords();
             if (nav === "help")
@@ -3970,8 +4115,6 @@ function bindEvents() {
     byId("dashboardGames").addEventListener("click", openGrades);
     byId("dashboardToday").addEventListener("click", openToday);
     byId("dashboardDex").addEventListener("click", openPokedex);
-    byId("rankingMode").addEventListener("change", renderLeaderboard);
-    byId("rankingRefresh").addEventListener("click", () => void renderLeaderboard());
     document.querySelectorAll("[data-help-category]").forEach((button) => button.addEventListener("click", () => openHelp((button.dataset.helpCategory ?? "all"))));
     document.querySelectorAll("[data-action]").forEach((button) => {
         button.addEventListener("click", () => {
