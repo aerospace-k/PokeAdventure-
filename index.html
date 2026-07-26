@@ -11,7 +11,10 @@
   <link rel="shortcut icon" href="./assets/pokeball-favicon-32.png?v=1.0.20260726.6">
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/pokeball-apple-touch-icon.png?v=1.0.20260726.6">
   <link rel="manifest" href="./site.webmanifest?v=1.0.20260726.6">
-  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260726.31">
+  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260726.41">
+  <meta name="application-name" content="포켓몬 배움 탐험대">
+  <meta name="app-version" content="1.0">
+  <meta name="theme-color" content="#78c9f3">
 </head>
 <body>
   <div id="bgDeco" class="bg-deco" aria-hidden="true"></div>
@@ -238,8 +241,14 @@
           <span>점수 <b id="memoryScore">0</b></span>
           <span>뒤집기 <b id="memoryMoves">0</b>번</span>
           <span>완성 <b id="memoryMatched">0</b>/<b id="memoryTotal">0</b></span>
+          <span>연속 <b id="memoryCombo">0</b></span>
           <span>남은 시간 <b id="memoryTime">10:00</b></span>
           <button class="quit-button" data-quit="memory" type="button">그만하기</button>
+        </div>
+        <div class="memory-mission">
+          <div id="memoryMascot" class="memory-ditto"></div>
+          <div class="memory-mission-copy"><span>DITTO TRANSFORM LAB</span><h2>메타몽 메모리 게임</h2><p id="memoryStatus">메타몽이 변신한 포켓몬의 위치를 기억해요.</p></div>
+          <div class="memory-transform"><span id="memoryRound">1단계 변신</span><div><i id="memoryTransformBar"></i></div><b id="memoryTransformText">0 / 17</b></div>
         </div>
         <div id="memoryGrid" class="memory-grid"></div>
       </section>
@@ -312,8 +321,12 @@
           <span>실수 <b id="symmetryMistakes">0</b></span><button class="quit-button" data-quit="symmetry" type="button">그만하기</button>
         </div>
         <div class="lab-layout">
-          <article class="lab-guide"><div id="symmetryMascot" class="lab-pokemon"></div><h2>메타몽 대칭 연구소</h2><p>왼쪽 모양과 똑같이 오른쪽 칸을 채워 주세요.</p></article>
-          <div class="lab-workbench"><div id="symmetryGrid" class="symmetry-grid"></div><button id="symmetryCheck" class="primary-button" type="button">대칭 확인</button></div>
+          <article class="lab-guide symmetry-guide">
+            <span class="symmetry-lab-label">PACHIRISU ELECTRIC LAB</span>
+            <div id="symmetryMascot" class="lab-pokemon"></div><h2>파치리스의 대칭 연구소</h2><p>왼쪽 전기 무늬와 똑같이 오른쪽 회로를 연결해 주세요.</p>
+            <div class="symmetry-charge"><span>대칭 에너지</span><div><i id="symmetryChargeBar"></i></div><b id="symmetryChargeText">0 / 5</b></div>
+          </article>
+          <div class="lab-workbench symmetry-workbench"><p id="symmetryStatus" class="symmetry-status" aria-live="polite">대칭축에서 같은 거리의 칸을 찾아요.</p><div id="symmetryGrid" class="symmetry-grid"></div><div class="symmetry-actions"><button id="symmetryHint" class="ghost-button symmetry-hint" type="button">전기 힌트 <small>-50점</small></button><button id="symmetryCheck" class="primary-button" type="button">회로 확인</button></div></div>
         </div>
       </section>
 
@@ -332,11 +345,23 @@
       <section id="screen-history" class="screen game-screen">
         <div class="hud">
           <span>점수 <b id="historyScore">0</b></span><span>복원 <b id="historyCount">0/8</b></span>
-          <span>실수 <b id="historyMistakes">0</b></span><button class="quit-button" data-quit="history" type="button">그만하기</button>
+          <span>연속 <b id="historyStreak">0</b></span><span>실수 <b id="historyMistakes">0</b></span><button class="quit-button" data-quit="history" type="button">그만하기</button>
         </div>
         <div class="history-layout">
-          <aside class="history-guide"><div id="historyMascot" class="lab-pokemon"></div><h2>세레비 역사 시간여행</h2><p>가장 오래된 사건부터 차례대로 선택해 시간의 길을 복원해요.</p></aside>
-          <div class="history-workspace"><div id="historyTimeline" class="history-timeline"></div><div id="historyCards" class="history-cards"></div><p id="historyFeedback" class="feedback" aria-live="polite"></p></div>
+          <aside class="history-guide">
+            <span class="history-guide-label">POLIWAG TIME VOYAGE</span>
+            <div id="historyMascot" class="lab-pokemon"></div>
+            <h2>발챙이 역사 시간여행</h2>
+            <p>발챙이의 시간 물결을 따라 가장 오래된 사건부터 차례대로 선택해요.</p>
+            <div class="history-guide-rule"><b>탐험 규칙</b><span>연속 정답일수록 보너스 점수가 커져요.</span></div>
+          </aside>
+          <div class="history-workspace">
+            <div class="history-mission-head"><span>복원된 시간 물결</span><b id="historyMissionText">첫 사건을 찾아보세요</b></div>
+            <div id="historyTimeline" class="history-timeline" aria-label="복원된 역사 시간선"></div>
+            <div class="history-choice-head"><b>다음 사건은 무엇일까요?</b><span>가장 오래된 사건을 선택하세요.</span></div>
+            <div id="historyCards" class="history-cards"></div>
+            <p id="historyFeedback" class="feedback history-feedback" aria-live="polite">발챙이가 시간의 물결을 열었어요!</p>
+          </div>
         </div>
       </section>
 
@@ -346,7 +371,13 @@
           <span>연속 <b id="safetyStreak">0</b></span><button class="quit-button" data-quit="safety" type="button">그만하기</button>
         </div>
         <div class="safety-layout">
-          <aside class="safety-guide"><div id="safetyMascot" class="lab-pokemon"></div><p id="safetyReaction">고라파덕과 안전한 행동을 찾아봐요.</p></aside>
+          <aside class="safety-guide">
+            <span class="safety-patrol-label">SQUIRTLE SAFETY PATROL</span>
+            <div id="safetyMascot" class="lab-pokemon"></div>
+            <h2>꼬부기 생활안전 구조대</h2>
+            <p id="safetyReaction">꼬부기와 가장 안전한 행동을 찾아봐요.</p>
+            <div class="safety-shield" aria-label="안전 방패 진행도"><span>물방울 안전 방패</span><div><i id="safetyShieldBar"></i></div><b id="safetyShieldText">0 / 10</b></div>
+          </aside>
           <article class="safety-card"><span id="safetyCategory" class="knowledge-category"></span><h2 id="safetyQuestion"></h2><div id="safetyChoices" class="safety-choices"></div><p id="safetyExplanation" class="knowledge-explanation" aria-live="polite"></p></article>
         </div>
       </section>
@@ -451,8 +482,9 @@
       </section>
 
       <section id="screen-help" class="screen">
-        <div class="screen-heading"><div><span class="eyebrow">GUIDE</span><h2>게임 도움말</h2></div></div>
-        <div class="help-start"><strong>처음인가요?</strong><span>학년을 고른 뒤 원하는 게임을 누르면 바로 시작돼요. 난이도는 플레이하며 자연스럽게 올라갑니다.</span></div>
+        <div class="screen-heading"><div><span class="eyebrow">TRAINER GUIDE</span><h2>게임 가이드 도감</h2><p>게임의 목표와 조작법을 확인하고 나에게 맞는 모험을 찾아보세요.</p></div></div>
+        <div class="help-start"><strong>처음인가요?</strong><div class="help-steps"><span><b>1</b>학년 선택</span><span><b>2</b>게임 선택</span><span><b>3</b>플레이하며 자동 성장</span></div><small>기록은 현재 브라우저에만 안전하게 저장돼요.</small></div>
+        <div class="help-toolbar"><label class="help-search"><span>게임 검색</span><input id="helpSearch" type="search" placeholder="예: 피카츄, 도형, 안전" autocomplete="off"></label><b id="helpResultCount" class="help-result-count">0개 게임</b></div>
         <div class="help-filters" aria-label="도움말 영역 선택">
           <button class="active" data-help-category="all" type="button">전체</button><button data-help-category="암산·수 연산" type="button">암산·연산</button><button data-help-category="도형·공간" type="button">도형·공간</button><button data-help-category="지식탐험" type="button">지식탐험</button><button data-help-category="미니게임" type="button">미니게임</button>
         </div>
@@ -475,6 +507,13 @@
 
   <noscript>이 게임은 JavaScript를 켜야 실행할 수 있습니다.</noscript>
   <script src="./config/allowed-trainers.js"></script>
-  <script defer src="./dist/main.js?v=1.0.20260726.31"></script>
+  <script defer src="./dist/main.js?v=1.0.20260726.41"></script>
+  <script>
+    if ("serviceWorker" in navigator && location.protocol !== "file:") {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(function () {});
+      });
+    }
+  </script>
 </body>
 </html>
