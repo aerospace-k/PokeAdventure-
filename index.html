@@ -31,12 +31,13 @@
     </div>
 
     <form id="nameEntry" class="name-entry hidden-panel">
-      <label for="nameInput">이름을 알려주세요</label>
+      <label id="nameEntryLabel" for="nameInput">이름을 알려주세요</label>
       <div class="name-row">
         <input id="nameInput" maxlength="6" autocomplete="nickname" placeholder="이름" required>
         <button class="primary-button" type="submit">다음</button>
       </div>
       <p id="accessMessage" class="access-message" role="alert" aria-live="assertive"></p>
+      <button id="cancelNameChange" class="secondary-button name-change-cancel hidden-panel" type="button">변경 취소</button>
     </form>
 
     <div id="avatarPick" class="avatar-pick hidden-panel">
