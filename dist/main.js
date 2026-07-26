@@ -56,8 +56,8 @@ const MODES = {
         hint: "목표 식이 바뀌면 디그다도 모두 새로 나와요.", colors: ["#f39a4b", "#d96d38"], category: "암산·수 연산"
     },
     memory: {
-        name: "짝맞추기", description: "식과 답 카드를 짝지어요",
-        hint: "적은 횟수로 모든 짝을 맞혀 보세요.", colors: ["#2eb988", "#198363"], category: "암산·수 연산"
+        name: "포켓몬 메모리", description: "같은 포켓몬 카드를 찾아요",
+        hint: "카드 위치를 기억해 같은 포켓몬 두 장을 맞혀 보세요.", colors: ["#2eb988", "#198363"], category: "미니게임"
     },
     ox: {
         name: "참·거짓 OX", description: "식과 답이 맞는지 판단해요",
@@ -96,8 +96,8 @@ const MODES = {
         hint: "교통·재난·응급·인터넷 상황에서 가장 안전한 선택을 해요.", colors: ["#f2b843", "#e27a4c"], category: "지식탐험"
     },
     snack: {
-        name: "잠만보 열매 캐치", description: "열매를 받고 바위를 피하는 60초 미니게임",
-        hint: "화면을 터치하거나 좌우 버튼으로 잠만보를 움직여 열매를 받아요.", colors: ["#68b95f", "#267d72"], category: "미니게임"
+        name: "잠만보 베리 대모험", description: "베리를 모아 피버를 만드는 60초 미니게임",
+        hint: "베리와 회복약을 받고, 딱딱한돌은 피해서 10콤보 피버를 만들어요.", colors: ["#68b95f", "#267d72"], category: "미니게임"
     }
 };
 const DIFFICULTIES = {
@@ -319,6 +319,76 @@ function saveRecord(entry) {
     const records = [entry, ...readRecords()].slice(0, 60);
     safeSet(STORAGE.records, JSON.stringify(records));
     updateSideInfo();
+    void uploadSharedRecords([entry]);
+}
+function sharedLeaderboardConfig() {
+    const config = window.POKE_LEADERBOARD_CONFIG;
+    if (!config?.enabled)
+        return null;
+    const supabaseUrl = String(config.supabaseUrl ?? "").trim().replace(/\/$/, "");
+    const publishableKey = String(config.publishableKey ?? "").trim();
+    const table = String(config.table ?? "trainer_scores").trim();
+    if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(supabaseUrl) || publishableKey.length < 20 || !/^[a-z0-9_]+$/i.test(table))
+        return null;
+    return { supabaseUrl, publishableKey, table };
+}
+function sharedHeaders(config, json = false) {
+    const headers = { apikey: config.publishableKey };
+    if (config.publishableKey.split(".").length === 3)
+        headers.Authorization = "Bearer " + config.publishableKey;
+    if (json)
+        headers["Content-Type"] = "application/json";
+    return headers;
+}
+function sharedRecordKey(entry) {
+    const source = [normalizeAccessName(entry.name), entry.mode, entry.grade, entry.score, entry.stars, Math.floor(entry.timestamp)].join("|");
+    let hash = 2166136261;
+    for (let index = 0; index < source.length; index += 1)
+        hash = Math.imul(hash ^ source.charCodeAt(index), 16777619);
+    return "record-" + (hash >>> 0).toString(36) + "-" + Math.floor(entry.timestamp).toString(36);
+}
+async function uploadSharedRecords(entries) {
+    const config = sharedLeaderboardConfig();
+    if (!config || !entries.length)
+        return false;
+    const oldestAllowed = Date.now() - 29 * 86400000;
+    const rows = entries.filter((entry) => entry.timestamp >= oldestAllowed).map((entry) => ({
+        record_key: sharedRecordKey(entry), trainer_name: entry.name.trim().slice(0, 20), mode: entry.mode, grade: entry.grade,
+        difficulty: entry.diff, score: Math.max(0, Math.min(10000000, Math.floor(entry.score))), stars: Math.max(0, Math.min(3, Math.floor(entry.stars))),
+        detail: entry.detail.slice(0, 100), played_at: new Date(entry.timestamp).toISOString()
+    }));
+    if (!rows.length)
+        return false;
+    try {
+        const response = await fetch(config.supabaseUrl + "/rest/v1/" + config.table + "?on_conflict=record_key", {
+            method: "POST", headers: { ...sharedHeaders(config, true), Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify(rows)
+        });
+        return response.ok;
+    }
+    catch {
+        return false;
+    }
+}
+async function readSharedRecords(mode) {
+    const config = sharedLeaderboardConfig();
+    if (!config)
+        return [];
+    const params = new URLSearchParams({ select: "trainer_name,mode,grade,difficulty,score,stars,detail,played_at", order: "played_at.desc", limit: "1000" });
+    if (mode !== null)
+        params.set("mode", "eq." + mode);
+    const response = await fetch(config.supabaseUrl + "/rest/v1/" + config.table + "?" + params.toString(), { headers: sharedHeaders(config) });
+    if (!response.ok)
+        throw new Error("Shared leaderboard request failed");
+    const rows = await response.json();
+    if (!Array.isArray(rows))
+        return [];
+    return rows.filter((row) => typeof row.trainer_name === "string" && typeof row.mode === "string" && row.mode in MODES
+        && Number.isFinite(Number(row.grade)) && ["easy", "normal", "hard"].includes(String(row.difficulty))
+        && Number.isFinite(Number(row.score)) && Number.isFinite(Number(row.stars)) && typeof row.detail === "string"
+        && Number.isFinite(Date.parse(String(row.played_at)))).map((row) => ({
+        name: String(row.trainer_name).slice(0, 20), mode: String(row.mode), grade: Number(row.grade), diff: String(row.difficulty),
+        score: Number(row.score), stars: Number(row.stars), detail: String(row.detail).slice(0, 100), timestamp: Date.parse(String(row.played_at))
+    }));
 }
 function getLifetimeStars() {
     const recordStars = readRecords().reduce((sum, record) => sum + Math.max(0, Math.min(3, Math.floor(record.stars))), 0);
@@ -726,7 +796,7 @@ function buildModes() {
         heading.textContent = category;
         grid.append(heading);
         Object.entries(MODES).filter((entry) => entry[1].category === category).forEach(([mode, meta]) => {
-            grid.append(cardButton(meta.name, meta.description, meta.colors, () => selectMode(mode), MODE_MASCOTS[mode]));
+            grid.append(cardButton(meta.name, meta.description, meta.colors, () => selectMode(mode), mode === "space" ? 722 : MODE_MASCOTS[mode]));
         });
     });
     showScreen("mode");
@@ -1120,7 +1190,12 @@ function startSelectedGame() {
     if (state.mode === "balloon")
         startBalloon();
     if (state.mode === "space") {
-        replaceWithTrainer(byId("spaceTrainer"), "brock.png", "웅이");
+        const spaceMascot = byId("spaceTrainer");
+        const rowlet = document.createElement("img");
+        rowlet.src = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/722.png";
+        rowlet.alt = "나몰빼미";
+        rowlet.loading = "eager";
+        spaceMascot.replaceChildren(rowlet);
         startSpace();
     }
     if (state.mode === "mine")
@@ -1489,7 +1564,7 @@ function stopMole() {
 }
 function startMole() {
     const config = MOLE_CONFIG[state.diff];
-    mole = { running: true, score: 0, combo: 0, best: 0, hits: 0, time: 60, target: newProblem("easy"), holes: [], spawnTimer: null, countdown: null, started: performance.now() };
+    mole = { running: true, score: 0, combo: 0, best: 0, hits: 0, bonusHits: 0, time: 60, target: newProblem("easy"), holes: [], spawnTimer: null, countdown: null, started: performance.now() };
     const grid = byId("moleGrid");
     grid.replaceChildren();
     for (let index = 0; index < 9; index += 1) {
@@ -1506,7 +1581,7 @@ function startMole() {
         button.addEventListener("click", () => hitMole(index));
         holeElement.append(button);
         grid.append(holeElement);
-        mole.holes.push({ button, number, active: false, value: 0, timeout: null });
+        mole.holes.push({ button, number, active: false, value: 0, bonus: false, timeout: null });
     }
     renderMoleHud();
     showScreen("mole");
@@ -1540,6 +1615,11 @@ function spawnMole() {
     const index = choose(free);
     const hole = mole.holes[index];
     const correct = Math.random() < .42;
+    const bonus = correct && Math.random() < .1;
+    hole.bonus = bonus;
+    hole.button.classList.toggle("bonus", bonus);
+    hole.button.setAttribute("aria-label", bonus ? "보너스 두트리오" : "디그다");
+    hole.button.replaceChildren(pokemonMedia({ id: bonus ? 51 : 50, name: bonus ? "두트리오" : "디그다" }), hole.number);
     const wrongOptions = choicesFor(mole.target.answer).filter((value) => value !== mole?.target.answer);
     hole.value = correct ? mole.target.answer : choose(wrongOptions);
     hole.number.textContent = String(hole.value);
@@ -1572,7 +1652,10 @@ function hitMole(index) {
         return;
     if (hole.value === mole.target.answer) {
         hole.button.classList.add("hit");
-        mole.score += 100 + mole.combo * 10;
+        const gained = hole.bonus ? 500 + mole.combo * 25 : 100 + mole.combo * 10;
+        mole.score += gained;
+        if (hole.bonus)
+            mole.bonusHits += 1;
         mole.combo += 1;
         mole.best = Math.max(mole.best, mole.combo);
         mole.hits += 1;
@@ -1616,10 +1699,11 @@ function finishMole() {
     stopMole();
     const stars = game.hits >= 24 ? 3 : game.hits >= 14 ? 2 : game.hits >= 6 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "mole", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.hits + "마리", timestamp: Date.now() });
-    showResult(stars, "디그다 찾기 완료", game.hits + "번 정답을 찾았어요.", [[String(game.score), "점수"], [String(game.hits), "명중"], [String(game.best), "최고 연속"], ["60초", "시간"]]);
+    showResult(stars, "디그다 찾기 완료", game.hits + "번 정답을 찾았어요.", [[String(game.score), "점수"], [String(game.hits), "명중"], [String(game.bonusHits), "두트리오 보너스"], [String(game.best), "최고 연속"]]);
 }
 let memory = null;
 let memorySession = 0;
+const MEMORY_POKEMON_IDS = [25, 133, 4, 7, 1, 151, 143, 37, 54, 129, 131, 132, 39, 52, 79, 92, 147];
 function stopMemory() {
     memorySession += 1;
     if (!memory)
@@ -1646,7 +1730,8 @@ function memoryDelay(callback, delay) {
 }
 function startMemory() {
     const session = ++memorySession;
-    memory = { running: true, session, cards: [], first: null, locked: false, moves: 0, matched: 0, totalMatched: 0, pairs: 3, round: 0, score: 0, started: performance.now(), timeouts: new Set(), countdown: null };
+    const pool = shuffle(MEMORY_POKEMON_IDS.map((id) => pokemonById(id)));
+    memory = { running: true, session, cards: [], first: null, locked: false, moves: 0, matched: 0, totalMatched: 0, pairs: 3, round: 0, score: 0, started: performance.now(), pool, timeouts: new Set(), countdown: null };
     buildMemoryRound(0);
     renderMemoryHud();
     showScreen("memory");
@@ -1662,9 +1747,9 @@ function buildMemoryRound(round) {
     if (!memory?.running)
         return;
     const configs = [
-        { pairs: 3, columns: 3, difficulty: "easy" },
-        { pairs: 6, columns: 4, difficulty: "normal" },
-        { pairs: 8, columns: 4, difficulty: "hard" }
+        { pairs: 3, columns: 3, difficulty: "easy", offset: 0 },
+        { pairs: 6, columns: 4, difficulty: "normal", offset: 3 },
+        { pairs: 8, columns: 4, difficulty: "hard", offset: 9 }
     ];
     const config = configs[round];
     memory.round = round;
@@ -1673,19 +1758,11 @@ function buildMemoryRound(round) {
     memory.first = null;
     memory.locked = false;
     memory.cards = [];
-    const problemList = [];
-    const seen = new Set();
-    while (problemList.length < config.pairs) {
-        const problem = newProblem(config.difficulty);
-        if (!seen.has(problem.answer)) {
-            seen.add(problem.answer);
-            problemList.push(problem);
-        }
-    }
+    const roundPokemon = memory.pool.slice(config.offset, config.offset + config.pairs);
     const rawCards = [];
-    problemList.forEach((problem, index) => {
-        rawCards.push({ key: index, text: problem.display });
-        rawCards.push({ key: index, text: String(problem.answer) });
+    roundPokemon.forEach((pokemon, index) => {
+        rawCards.push({ key: index, pokemon });
+        rawCards.push({ key: index, pokemon });
     });
     const grid = byId("memoryGrid");
     grid.style.gridTemplateColumns = "repeat(" + config.columns + ",1fr)";
@@ -1694,14 +1771,39 @@ function buildMemoryRound(round) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "memory-card";
-        button.textContent = "?";
         button.setAttribute("aria-label", "뒤집지 않은 카드");
         button.addEventListener("click", () => flipMemoryCard(index));
         grid.append(button);
-        memory?.cards.push({ key: card.key, text: card.text, matched: false, element: button });
+        memory?.cards.push({ key: card.key, pokemon: card.pokemon, matched: false, element: button });
     });
-    showToast((round + 1) + "단계 · " + DIFFICULTIES[config.difficulty].name);
+    memory.locked = true;
+    memory.cards.forEach((card) => {
+        card.element.classList.add("flipped", "preview");
+        revealMemoryCard(card);
+    });
+    showToast("포켓몬의 위치를 기억하세요!");
+    memoryDelay(() => {
+        if (!memory)
+            return;
+        memory.cards.forEach((card) => {
+            card.element.classList.remove("flipped", "preview");
+            concealMemoryCard(card);
+        });
+        memory.locked = false;
+        showToast((round + 1) + "단계 · 짝을 찾아보세요!");
+    }, round === 0 ? 1800 : round === 1 ? 1500 : 1250);
     renderMemoryHud();
+}
+function revealMemoryCard(card) {
+    const name = document.createElement("span");
+    name.className = "memory-name";
+    name.textContent = card.pokemon.name;
+    card.element.replaceChildren(pokemonMedia(card.pokemon), name);
+    card.element.setAttribute("aria-label", card.pokemon.name);
+}
+function concealMemoryCard(card) {
+    card.element.replaceChildren();
+    card.element.setAttribute("aria-label", "뒤집지 않은 카드");
 }
 function flipMemoryCard(index) {
     if (!memory?.running || memory.locked)
@@ -1710,8 +1812,7 @@ function flipMemoryCard(index) {
     if (!card || card.matched || card.element.classList.contains("flipped"))
         return;
     card.element.classList.add("flipped");
-    card.element.textContent = card.text;
-    card.element.setAttribute("aria-label", card.text);
+    revealMemoryCard(card);
     if (memory.first === null) {
         memory.first = index;
         return;
@@ -1729,6 +1830,8 @@ function flipMemoryCard(index) {
         memory.totalMatched += 1;
         memory.score += 100;
         correctSound();
+        playPokemonCry(card.pokemon.id, .13);
+        pokemonSparkBurst(7);
         renderMemoryHud();
         if (memory.matched >= memory.pairs) {
             if (memory.round < 2)
@@ -1739,12 +1842,16 @@ function flipMemoryCard(index) {
     }
     else {
         memory.locked = true;
+        first.element.classList.add("mismatch");
+        card.element.classList.add("mismatch");
         wrongSound();
         memoryDelay(() => {
+            first.element.classList.remove("mismatch");
+            card.element.classList.remove("mismatch");
             first.element.classList.remove("flipped");
             card.element.classList.remove("flipped");
-            first.element.textContent = "?";
-            card.element.textContent = "?";
+            concealMemoryCard(first);
+            concealMemoryCard(card);
             if (memory)
                 memory.locked = false;
         }, 850);
@@ -1771,7 +1878,7 @@ function finishMemory(timedOut = false) {
     const stars = timedOut ? (completion >= .75 ? 2 : completion >= .4 ? 1 : 0) : ratio >= .7 ? 3 : ratio >= .5 ? 2 : ratio >= .34 ? 1 : 0;
     stopMemory();
     saveRecord({ name: getName() || "친구", mode: "memory", grade: state.grade, diff: state.diff, score: game.score + stars * 100, stars, detail: game.totalMatched + "/17쌍 · " + game.moves + "번", timestamp: Date.now() });
-    showResult(stars, timedOut ? "10분 도전 완료" : "짝맞추기 완료", timedOut ? game.totalMatched + "쌍을 찾았어요." : "3단계를 모두 완료했어요.", [[String(game.score + stars * 100), "점수"], [String(game.moves), "뒤집기"], [seconds + "초", "시간"], [game.totalMatched + "/17", "완성"]]);
+    showResult(stars, timedOut ? "포켓몬 메모리 도전 완료" : "포켓몬 메모리 완료", timedOut ? game.totalMatched + "쌍을 찾았어요." : "포켓몬 17쌍을 모두 찾았어요!", [[String(game.score + stars * 100), "점수"], [String(game.moves), "뒤집기"], [seconds + "초", "시간"], [game.totalMatched + "/17", "완성"]]);
 }
 let ox = null;
 function stopOx() {
@@ -2005,6 +2112,29 @@ function shapeSvg(shape, rotation, color) {
     svg.setAttribute("viewBox", "0 0 120 100");
     svg.setAttribute("class", "shape-svg");
     svg.setAttribute("aria-label", SHAPE_LABELS[shape]);
+    const gradientId = "shape-gradient-" + Math.random().toString(36).slice(2);
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    const gradient = document.createElementNS("http://www.w3.org/2000/svg", "linearGradient");
+    gradient.setAttribute("id", gradientId);
+    gradient.setAttribute("x1", "0");
+    gradient.setAttribute("y1", "0");
+    gradient.setAttribute("x2", "1");
+    gradient.setAttribute("y2", "1");
+    [["0%", "#ffffff", ".72"], ["32%", color, "1"], ["100%", color, ".76"]].forEach(([offset, stopColor, opacity]) => {
+        const stop = document.createElementNS("http://www.w3.org/2000/svg", "stop");
+        stop.setAttribute("offset", offset);
+        stop.setAttribute("stop-color", stopColor);
+        stop.setAttribute("stop-opacity", opacity);
+        gradient.append(stop);
+    });
+    defs.append(gradient);
+    const shadow = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+    shadow.setAttribute("cx", "60");
+    shadow.setAttribute("cy", "94");
+    shadow.setAttribute("rx", "39");
+    shadow.setAttribute("ry", "4");
+    shadow.setAttribute("fill", "#26335f");
+    shadow.setAttribute("opacity", ".14");
     const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
     group.setAttribute("transform", "rotate(" + rotation + " 60 50)");
     const node = shape === "circle"
@@ -2018,12 +2148,12 @@ function shapeSvg(shape, rotation, color) {
     else {
         node.setAttribute("points", SHAPE_POINTS[shape]);
     }
-    node.setAttribute("fill", color);
-    node.setAttribute("stroke", "#26335f");
-    node.setAttribute("stroke-width", "4");
+    node.setAttribute("fill", "url(#" + gradientId + ")");
+    node.setAttribute("stroke", "#1f477c");
+    node.setAttribute("stroke-width", "5");
     node.setAttribute("stroke-linejoin", "round");
     group.append(node);
-    svg.append(group);
+    svg.append(defs, shadow, group);
     return svg;
 }
 function makeShapeQuestion(difficulty) {
@@ -2073,6 +2203,7 @@ function makeRotationQuestion(difficulty) {
     turns.forEach((turn) => {
         const chip = document.createElement("span");
         chip.className = "turn-chip";
+        chip.dataset.turn = String(turn.value);
         chip.textContent = turn.label;
         sequence.append(chip);
     });
@@ -2092,8 +2223,18 @@ function blockBoard(values) {
     values.flat().forEach((height) => {
         const cell = document.createElement("span");
         cell.className = "block-cell" + (height === 0 ? " empty" : "");
-        cell.textContent = height === 0 ? "0" : String(height);
         cell.setAttribute("aria-label", height + "개 높이");
+        for (let level = 0; level < height; level += 1) {
+            const cube = document.createElement("i");
+            cube.className = "block-cube";
+            cube.style.setProperty("--cube-level", String(level));
+            cell.append(cube);
+        }
+        if (height > 0) {
+            const label = document.createElement("b");
+            label.textContent = String(height);
+            cell.append(label);
+        }
         board.append(cell);
     });
     return board;
@@ -2127,6 +2268,126 @@ function makeBlocksQuestion(difficulty) {
     return {
         kind: "blocks", title: "쌓기나무는 모두 몇 개일까요?", instruction: "각 칸의 숫자는 그 자리에 쌓인 블록의 높이예요.", target,
         choices: numericChoices(answer, Math.max(3, size * 2))
+    };
+}
+function makePatternQuestion(difficulty) {
+    const pool = difficulty === "easy"
+        ? ["circle", "triangle", "square", "rectangle"]
+        : Object.keys(SHAPE_LABELS);
+    const baseLength = difficulty === "easy" ? 2 : 3;
+    const base = shuffle(pool).slice(0, baseLength);
+    const visibleLength = difficulty === "easy" ? 3 : 5;
+    const answerShape = base[visibleLength % base.length];
+    const target = document.createElement("div");
+    target.className = "pattern-strip";
+    for (let index = 0; index < visibleLength; index += 1) {
+        const item = document.createElement("span");
+        item.className = "pattern-item";
+        item.append(shapeSvg(base[index % base.length], index * 45, "#70b7ff"));
+        target.append(item);
+    }
+    const missing = document.createElement("span");
+    missing.className = "pattern-missing";
+    missing.textContent = "?";
+    target.append(missing);
+    const distractors = shuffle(pool.filter((shape) => shape !== answerShape)).slice(0, 3);
+    const choices = shuffle([answerShape, ...distractors]).map((shape) => ({
+        visual: shapeSvg(shape, randomInt(0, 3) * 90, shape === answerShape ? "#ffd45f" : "#9bcaff"),
+        label: SHAPE_LABELS[shape], correct: shape === answerShape
+    }));
+    return { kind: "pattern", title: "다음에 올 도형은 무엇일까요?", instruction: "반복되는 도형의 순서를 찾아 빈칸을 완성하세요.", target, choices };
+}
+function mirrorGrid(values, className = "mirror-grid") {
+    const grid = document.createElement("div");
+    grid.className = className;
+    grid.style.gridTemplateColumns = "repeat(" + values[0]?.length + ",1fr)";
+    values.flat().forEach((active) => {
+        const cell = document.createElement("span");
+        if (active)
+            cell.className = "active";
+        grid.append(cell);
+    });
+    return grid;
+}
+function makeMirrorQuestion(difficulty) {
+    const rows = difficulty === "hard" ? 4 : 3;
+    const half = [];
+    for (let row = 0; row < rows; row += 1)
+        half.push([Math.random() > .45, Math.random() > .45]);
+    if (half.flat().every((value) => !value))
+        half[0][0] = true;
+    const correct = half.map((row) => [...row, ...row.slice().reverse()]);
+    const target = document.createElement("div");
+    target.className = "mirror-prompt";
+    target.append(mirrorGrid(half, "mirror-half"));
+    const axis = document.createElement("span");
+    axis.className = "mirror-axis";
+    const unknown = document.createElement("span");
+    unknown.className = "mirror-unknown";
+    unknown.textContent = "?";
+    target.append(axis, unknown);
+    const matrices = [correct];
+    const used = new Set([JSON.stringify(correct)]);
+    while (matrices.length < 4) {
+        const altered = correct.map((row) => [...row]);
+        const changes = difficulty === "hard" ? 2 : 1;
+        for (let change = 0; change < changes; change += 1) {
+            const row = randomInt(0, rows - 1);
+            const column = randomInt(2, 3);
+            altered[row][column] = !altered[row][column];
+        }
+        const key = JSON.stringify(altered);
+        if (!used.has(key)) {
+            used.add(key);
+            matrices.push(altered);
+        }
+    }
+    return {
+        kind: "mirror", title: "거울에 비친 완성 모양은?", instruction: "점선을 기준으로 왼쪽 무늬를 똑같이 뒤집어 보세요.", target,
+        choices: shuffle(matrices.map((matrix, index) => ({ visual: mirrorGrid(matrix), label: "대칭 무늬", correct: index === 0 })))
+    };
+}
+function topViewGrid(values) {
+    const grid = document.createElement("div");
+    grid.className = "topview-grid";
+    grid.style.gridTemplateColumns = "repeat(" + values[0]?.length + ",1fr)";
+    values.flat().forEach((filled) => {
+        const cell = document.createElement("span");
+        if (filled)
+            cell.className = "filled";
+        grid.append(cell);
+    });
+    return grid;
+}
+function makeTopViewQuestion(difficulty) {
+    const size = difficulty === "easy" ? 2 : 3;
+    const maxHeight = difficulty === "hard" ? 4 : 3;
+    const values = Array.from({ length: size }, () => Array.from({ length: size }, () => randomInt(0, maxHeight)));
+    if (values.flat().every((value) => value === 0))
+        values[0][0] = 1;
+    const correct = values.map((row) => row.map((height) => height > 0));
+    const matrices = [correct];
+    const used = new Set([JSON.stringify(correct)]);
+    while (matrices.length < 4) {
+        const altered = correct.map((row) => [...row]);
+        const row = randomInt(0, size - 1);
+        const column = randomInt(0, size - 1);
+        altered[row][column] = !altered[row][column];
+        const key = JSON.stringify(altered);
+        if (!used.has(key)) {
+            used.add(key);
+            matrices.push(altered);
+        }
+    }
+    const target = document.createElement("div");
+    target.className = "topview-scene";
+    target.append(blockBoard(values));
+    const label = document.createElement("span");
+    label.textContent = "위에서 내려다보면?";
+    target.append(label);
+    return {
+        kind: "topview", title: "위에서 본 모양을 찾아요", instruction: "높이는 생각하지 말고 블록이 놓인 자리만 살펴보세요.", target,
+        choices: shuffle(matrices.map((matrix, index) => ({ visual: topViewGrid(matrix), label: "위에서 본 모양", correct: index === 0 })))
     };
 }
 const VALID_NETS = [
@@ -2170,10 +2431,10 @@ function makeNetQuestion() {
 }
 function spaceKindsForGrade(grade) {
     if (grade <= 1)
-        return ["shape", "rotation"];
+        return ["shape", "rotation", "pattern", "mirror"];
     if (grade <= 4)
-        return ["shape", "rotation", "blocks"];
-    return ["shape", "rotation", "blocks", "net"];
+        return ["shape", "rotation", "pattern", "blocks", "mirror", "topview"];
+    return ["shape", "rotation", "pattern", "blocks", "mirror", "topview", "net"];
 }
 function makeSpaceQuestion(index) {
     const kinds = spaceKindsForGrade(state.grade ?? 0);
@@ -2185,6 +2446,12 @@ function makeSpaceQuestion(index) {
         return makeRotationQuestion(difficulty);
     if (kind === "blocks")
         return makeBlocksQuestion(difficulty);
+    if (kind === "pattern")
+        return makePatternQuestion(difficulty);
+    if (kind === "mirror")
+        return makeMirrorQuestion(difficulty);
+    if (kind === "topview")
+        return makeTopViewQuestion(difficulty);
     return makeNetQuestion();
 }
 function stopSpace() {
@@ -2217,8 +2484,18 @@ function nextSpaceQuestion() {
     }
     space.locked = false;
     space.current = makeSpaceQuestion(space.index);
-    const labels = { shape: "도형 판별", rotation: "공간 회전", blocks: "쌓기나무", net: "전개도" };
+    const labels = { shape: "도형 판별", rotation: "공간 회전", blocks: "쌓기나무", net: "전개도", pattern: "도형 규칙", mirror: "거울 대칭", topview: "위에서 본 모양" };
+    const hints = {
+        shape: "크기가 아니라 변의 수와 꼭짓점을 비교해 보세요.",
+        rotation: "첫 방향부터 화살표를 하나씩 돌려 보세요.",
+        blocks: "보이지 않는 아래층 나무까지 함께 세어 보세요.",
+        net: "맞닿은 면을 머릿속으로 하나씩 접어 보세요.",
+        pattern: "반복되는 모양의 가장 짧은 묶음을 찾아보세요.",
+        mirror: "가운데 선에서 같은 거리의 칸을 살펴보세요.",
+        topview: "높이는 잠시 잊고 나무가 놓인 자리만 확인하세요."
+    };
     byId("spaceKind").textContent = labels[space.current.kind];
+    byId("spaceHint").textContent = hints[space.current.kind];
     byId("spaceTitle").textContent = space.current.title;
     byId("spaceInstruction").textContent = space.current.instruction;
     byId("spaceTarget").replaceChildren(space.current.target);
@@ -2288,6 +2565,10 @@ function finishSpace() {
     showResult(stars, "도형·공간 탐험 완료", game.correct + "개의 공간 문제를 해결했어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/10", "정답"], [String(game.best), "최고 연속"]]);
 }
 let snack = null;
+const SNACK_ITEM_IMAGES = {
+    berry: ["oran-berry", "sitrus-berry", "pecha-berry", "cheri-berry", "lum-berry"],
+    gold: ["rare-candy"], potion: ["super-potion"], rock: ["hard-stone"]
+};
 function stopSnack() {
     if (!snack)
         return;
@@ -2302,8 +2583,9 @@ function stopSnack() {
     snack.items = [];
 }
 function startSnack() {
-    snack = { running: true, score: 0, combo: 0, best: 0, time: 60, x: 50, items: [], raf: null, spawnTimer: null, countdown: null, lastFrame: performance.now(), caught: 0 };
+    snack = { running: true, score: 0, combo: 0, best: 0, time: 60, lives: 3, x: 50, items: [], raf: null, spawnTimer: null, countdown: null, lastFrame: performance.now(), caught: 0, goldCaught: 0 };
     byId("snackPlayer").replaceChildren(pokemonMedia({ id: 143, name: "잠만보" }));
+    byId("snackField").classList.remove("fever");
     showScreen("snack");
     renderSnackHud();
     positionSnackPlayer();
@@ -2319,14 +2601,20 @@ function spawnSnackItem() {
         return;
     const progress = 1 - snack.time / 60;
     const roll = Math.random();
-    const kind = roll < .08 ? "gold" : roll < .22 + progress * .08 ? "rock" : "berry";
+    const kind = roll < .06 ? "gold" : roll < .11 ? "potion" : roll < .25 + progress * .1 ? "rock" : "berry";
     const element = document.createElement("div");
     element.className = "snack-item " + kind;
-    element.textContent = kind === "gold" ? "✨" : kind === "rock" ? "🪨" : choose(["🍎", "🍓", "🍇", "🍊"]);
+    const imageName = choose([...SNACK_ITEM_IMAGES[kind]]);
+    const image = document.createElement("img");
+    image.src = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/" + imageName + ".png";
+    image.alt = kind === "gold" ? "이상한사탕" : kind === "rock" ? "딱딱한돌" : kind === "potion" ? "회복약" : "나무열매";
+    image.addEventListener("error", () => { element.textContent = kind === "gold" ? "★" : kind === "rock" ? "◆" : kind === "potion" ? "+" : "●"; }, { once: true });
+    element.append(image);
     const x = randomInt(7, 93);
     element.style.left = x + "%";
     byId("snackField").append(element);
-    snack.items.push({ element, kind, y: -60, x, speed: 85 + progress * 120 + randomInt(0, 45) });
+    const speedScale = kind === "gold" ? .92 : kind === "rock" ? 1.08 : 1;
+    snack.items.push({ element, kind, y: -60, x, speed: (85 + progress * 120 + randomInt(0, 45)) * speedScale });
 }
 function snackFrame(now) {
     if (!snack?.running)
@@ -2355,24 +2643,54 @@ function snackFrame(now) {
 function catchSnackItem(item, index) {
     if (!snack)
         return;
+    const field = byId("snackField");
+    const player = byId("snackPlayer");
+    const effect = document.createElement("span");
+    effect.className = "snack-catch-effect " + item.kind;
+    effect.style.left = item.x + "%";
+    effect.style.top = Math.max(8, item.y) + "px";
     item.element.remove();
     snack.items.splice(index, 1);
     if (item.kind === "rock") {
         snack.score = Math.max(0, snack.score - 120);
         snack.combo = 0;
+        snack.lives -= 1;
+        effect.textContent = "-120  ♥-1";
+        player.classList.remove("happy");
+        player.classList.add("hurt");
+        field.classList.remove("fever");
         bumpSound();
-        showToast("바위는 피해요!");
+        showToast(snack.lives > 0 ? "딱딱한돌이에요! 체력이 줄었어요." : "잠만보가 잠시 쉬어야 해요!");
+        window.setTimeout(() => player.classList.remove("hurt"), 500);
     }
     else {
         snack.combo += 1;
         snack.best = Math.max(snack.best, snack.combo);
         snack.caught += 1;
-        snack.score += (item.kind === "gold" ? 300 : 100) + snack.combo * 5;
-        collectSound(item.kind === "gold");
+        const fever = snack.combo >= 10;
+        const base = item.kind === "gold" ? 300 : item.kind === "potion" ? 150 : 100;
+        const gained = (base + snack.combo * 5) * (fever ? 2 : 1);
+        snack.score += gained;
         if (item.kind === "gold")
-            pokemonSparkBurst(7);
+            snack.goldCaught += 1;
+        if (item.kind === "potion")
+            snack.lives = Math.min(3, snack.lives + 1);
+        effect.textContent = "+" + gained + (fever ? "  FEVER ×2" : "");
+        player.classList.remove("hurt");
+        player.classList.add("happy");
+        field.classList.toggle("fever", fever);
+        collectSound(item.kind === "gold");
+        if (item.kind === "gold" || snack.combo === 10)
+            pokemonSparkBurst(item.kind === "gold" ? 9 : 14);
+        if (snack.combo === 10)
+            showToast("10콤보! 잠만보 피버 ×2!");
+        window.setTimeout(() => player.classList.remove("happy"), 420);
     }
+    field.append(effect);
+    window.setTimeout(() => effect.remove(), 850);
     renderSnackHud();
+    if (snack.lives <= 0)
+        finishSnack(true);
 }
 function positionSnackPlayer() { if (snack)
     byId("snackPlayer").style.left = snack.x + "%"; }
@@ -2381,15 +2699,15 @@ function moveSnack(amount) { if (!snack?.running)
 function moveSnackTo(clientX) { if (!snack?.running)
     return; const rect = byId("snackField").getBoundingClientRect(); snack.x = Math.max(7, Math.min(93, (clientX - rect.left) / rect.width * 100)); positionSnackPlayer(); }
 function renderSnackHud() { if (!snack)
-    return; byId("snackScore").textContent = String(snack.score); byId("snackTime").textContent = String(snack.time); byId("snackCombo").textContent = String(snack.combo); byId("snackSpeed").textContent = (1 + (60 - snack.time) / 60 * 1.4).toFixed(1); }
-function finishSnack() {
+    return; byId("snackScore").textContent = String(snack.score); byId("snackTime").textContent = String(snack.time); byId("snackCombo").textContent = String(snack.combo); byId("snackLives").textContent = "♥".repeat(snack.lives) + "♡".repeat(3 - snack.lives); byId("snackSpeed").textContent = (1 + (60 - snack.time) / 60 * 1.4).toFixed(1); const feverProgress = Math.min(10, snack.combo); byId("snackFeverBar").style.width = feverProgress * 10 + "%"; byId("snackFeverText").textContent = snack.combo >= 10 ? "FEVER ×2" : feverProgress + "/10"; }
+function finishSnack(outOfLives = false) {
     if (!snack?.running || state.grade === null)
         return;
     const game = snack;
     stopSnack();
     const stars = game.score >= 3200 ? 3 : game.score >= 1900 ? 2 : game.score >= 700 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "snack", grade: state.grade, diff: "easy", score: game.score, stars, detail: game.caught + "개 열매", timestamp: Date.now() });
-    showResult(stars, "열매 파티 완료!", "잠만보가 열매 " + game.caught + "개를 맛있게 받았어요.", [[String(game.score), "점수"], [String(game.caught), "열매"], [String(game.best), "최고 연속"], ["60초", "시간"]]);
+    showResult(stars, outOfLives ? "잠만보 휴식 시간" : "베리 대모험 완료!", "잠만보가 아이템 " + game.caught + "개를 맛있게 받았어요.", [[String(game.score), "점수"], [String(game.caught), "획득"], [String(game.goldCaught), "이상한사탕"], [String(game.best), "최고 연속"]]);
 }
 let symmetry = null;
 function stopSymmetry() { if (symmetry)
@@ -3270,9 +3588,17 @@ function openRecords() {
     }
     showScreen("records");
 }
-function rankingRows(mode) {
+let leaderboardRequest = 0;
+let localLeaderboardSynced = false;
+function rankingAvatarPokemon(name) {
+    let hash = 0;
+    for (let index = 0; index < name.length; index += 1)
+        hash = (Math.imul(hash, 31) + name.charCodeAt(index)) | 0;
+    return POKEMON[Math.abs(hash) % POKEMON.length];
+}
+function rankingRows(mode, records = readRecords()) {
     const grouped = new Map();
-    readRecords().filter((record) => mode === null || record.mode === mode).forEach((record) => {
+    records.filter((record) => mode === null || record.mode === mode).forEach((record) => {
         const row = grouped.get(record.name) ?? { name: record.name, score: 0, stars: 0, games: 0, best: 0 };
         row.score += record.score;
         row.stars += record.stars;
@@ -3284,39 +3610,68 @@ function rankingRows(mode) {
         grouped.set(getName() || "친구", { name: getName() || "친구", score: 0, stars: 0, games: 0, best: 0 });
     return Array.from(grouped.values()).sort((a, b) => mode === null ? b.stars - a.stars || b.score - a.score : b.best - a.best || b.stars - a.stars).slice(0, 20);
 }
-function renderLeaderboard() {
-    const value = byId("rankingMode").value;
-    const mode = value === "all" ? null : value;
-    const rows = rankingRows(mode);
+function paintLeaderboard(rows, mode) {
+    const summary = byId("rankingSummary");
+    summary.replaceChildren();
+    const totals = [
+        [String(rows.length), "참가 트레이너"],
+        [String(rows.reduce((sum, row) => sum + row.games, 0)), "총 플레이"],
+        ["★ " + rows.reduce((sum, row) => sum + row.stars, 0), "모은 별"]
+    ];
+    totals.forEach(([value, label]) => {
+        const item = document.createElement("div");
+        const strong = document.createElement("strong");
+        strong.textContent = value;
+        const span = document.createElement("span");
+        span.textContent = label;
+        item.append(strong, span);
+        summary.append(item);
+    });
     const podium = byId("rankingPodium");
     podium.replaceChildren();
     rows.slice(0, 3).forEach((row, index) => {
         const card = document.createElement("article");
         card.className = "ranking-place place-" + (index + 1);
+        if (row.name === (getName() || "친구"))
+            card.classList.add("current");
+        const tier = document.createElement("small");
+        tier.className = "ranking-tier";
+        tier.textContent = ["LEAGUE CHAMPION", "ELITE TRAINER", "ACE TRAINER"][index] ?? "TRAINER";
         const medal = document.createElement("span");
-        medal.textContent = ["🥇", "🥈", "🥉"][index] ?? "";
+        medal.className = "ranking-medal";
+        medal.textContent = String(index + 1);
         const avatar = document.createElement("div");
         avatar.className = "ranking-avatar";
-        avatar.append(pokemonAvatarMedia(POKEMON[(index * 7) % POKEMON.length]));
+        avatar.append(pokemonAvatarMedia(rankingAvatarPokemon(row.name)));
         const name = document.createElement("strong");
         name.textContent = row.name;
         const score = document.createElement("b");
         score.textContent = mode === null ? row.stars + "개 별" : row.best + "점";
         const detail = document.createElement("small");
         detail.textContent = row.games + "회 플레이 · 누적 " + row.score + "점";
-        card.append(medal, avatar, name, score, detail);
+        card.append(tier, medal, avatar, name, score, detail);
         podium.append(card);
     });
     const table = byId("rankingTable");
     table.replaceChildren();
+    const header = document.createElement("div");
+    header.className = "ranking-table-head";
+    ["순위", "트레이너", "플레이", "별", "기록"].forEach((label) => { const span = document.createElement("span"); span.textContent = label; header.append(span); });
+    table.append(header);
     rows.forEach((row, index) => {
         const item = document.createElement("div");
         if (row.name === (getName() || "친구"))
             item.classList.add("current");
         const rank = document.createElement("b");
-        rank.textContent = String(index + 1);
+        rank.className = "ranking-row-rank";
+        rank.textContent = "#" + (index + 1);
         const name = document.createElement("strong");
         name.textContent = row.name;
+        if (row.name === (getName() || "친구")) {
+            const me = document.createElement("em");
+            me.textContent = "ME";
+            name.append(me);
+        }
         const games = document.createElement("span");
         games.textContent = row.games + "회";
         const stars = document.createElement("span");
@@ -3326,6 +3681,42 @@ function renderLeaderboard() {
         item.append(rank, name, games, stars, score);
         table.append(item);
     });
+}
+async function renderLeaderboard() {
+    const request = ++leaderboardRequest;
+    const refresh = byId("rankingRefresh");
+    refresh.disabled = true;
+    refresh.classList.add("loading");
+    const value = byId("rankingMode").value;
+    const mode = value === "all" ? null : value;
+    const note = byId("rankingNote");
+    paintLeaderboard(rankingRows(mode), mode);
+    if (!sharedLeaderboardConfig()) {
+        note.textContent = "공용 순위표 설정 전이에요. 현재는 이 브라우저의 기록을 표시합니다.";
+        refresh.disabled = false;
+        refresh.classList.remove("loading");
+        return;
+    }
+    note.textContent = "다른 기기의 트레이너 기록을 불러오고 있어요...";
+    try {
+        if (!localLeaderboardSynced) {
+            localLeaderboardSynced = await uploadSharedRecords(readRecords());
+        }
+        const sharedRecords = await readSharedRecords(mode);
+        if (request !== leaderboardRequest)
+            return;
+        paintLeaderboard(rankingRows(mode, sharedRecords), mode);
+        note.textContent = "공용 순위표 · 여러 기기에서 등록된 최근 기록 " + sharedRecords.length + "개를 반영했어요.";
+    }
+    catch {
+        if (request !== leaderboardRequest)
+            return;
+        note.textContent = "공용 순위표에 연결하지 못해 이 브라우저의 기록을 표시합니다.";
+    }
+    if (request === leaderboardRequest) {
+        refresh.disabled = false;
+        refresh.classList.remove("loading");
+    }
 }
 function openLeaderboard() {
     cleanupGame();
@@ -3476,7 +3867,7 @@ function pokemonSparkBurst(count) {
 function decorateGameScreens() {
     const screenPokemon = {
         "screen-quiz": 25, "screen-rain": 131, "screen-mole": 50, "screen-memory": 132,
-        "screen-ox": 54, "screen-balloon": 39, "screen-space": 137, "screen-mine": 100
+        "screen-ox": 54, "screen-balloon": 39, "screen-mine": 100
     };
     Object.entries(screenPokemon).forEach(([screenId, pokemonId]) => {
         const screen = byId(screenId);
@@ -3580,6 +3971,7 @@ function bindEvents() {
     byId("dashboardToday").addEventListener("click", openToday);
     byId("dashboardDex").addEventListener("click", openPokedex);
     byId("rankingMode").addEventListener("change", renderLeaderboard);
+    byId("rankingRefresh").addEventListener("click", () => void renderLeaderboard());
     document.querySelectorAll("[data-help-category]").forEach((button) => button.addEventListener("click", () => openHelp((button.dataset.helpCategory ?? "all"))));
     document.querySelectorAll("[data-action]").forEach((button) => {
         button.addEventListener("click", () => {
