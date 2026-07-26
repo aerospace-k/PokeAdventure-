@@ -781,6 +781,13 @@ const TYPE_NAMES = {
     normal: "노말", fire: "불꽃", water: "물", electric: "전기", grass: "풀", ice: "얼음", fighting: "격투", poison: "독",
     ground: "땅", flying: "비행", psychic: "에스퍼", bug: "벌레", rock: "바위", ghost: "고스트", dragon: "드래곤", dark: "악", steel: "강철", fairy: "페어리"
 };
+const TYPE_IDS = {
+    normal: 1, fighting: 2, flying: 3, poison: 4, ground: 5, rock: 6, bug: 7, ghost: 8, steel: 9,
+    fire: 10, water: 11, grass: 12, electric: 13, psychic: 14, ice: 15, dragon: 16, dark: 17, fairy: 18
+};
+function typeIconUrl(type) {
+    return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/types/generation-viii/sword-shield/" + TYPE_IDS[type] + ".png";
+}
 function spriteUrl(id) {
     return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/" + id + ".png";
 }
@@ -824,10 +831,39 @@ function openPokedex() {
     });
     const detail = byId("pokedexDetail");
     detail.replaceChildren();
+    detail.classList.add("pokedex-intro");
     const oak = trainerMedia("oak.png", "오박사", "pokedex-oak");
+    const copy = document.createElement("div");
+    copy.className = "pokedex-intro-copy";
+    const kicker = document.createElement("span");
+    kicker.className = "pokedex-intro-kicker";
+    kicker.textContent = "OAK'S RESEARCH";
+    const title = document.createElement("h3");
+    title.textContent = "오박사의 연구 노트";
     const message = document.createElement("p");
     message.textContent = "게임에서 별을 모으면 새로운 포켓몬을 발견해요. 포켓몬을 선택해 보세요.";
-    detail.append(oak, message);
+    const progress = document.createElement("div");
+    progress.className = "pokedex-intro-progress";
+    const progressLabel = document.createElement("span");
+    progressLabel.textContent = "도감 완성도 " + Math.round(unlocked / POKEMON.length * 100) + "%";
+    const progressTrack = document.createElement("div");
+    const progressFill = document.createElement("i");
+    progressFill.style.width = unlocked / POKEMON.length * 100 + "%";
+    progressTrack.append(progressFill);
+    const stats = document.createElement("div");
+    stats.className = "pokedex-intro-stats";
+    [[String(unlocked), "발견"], [String(POKEMON.length - unlocked), "남은 포켓몬"]].forEach(([value, label]) => {
+        const stat = document.createElement("span");
+        const strong = document.createElement("b");
+        strong.textContent = value;
+        stat.append(strong, label);
+        stats.append(stat);
+    });
+    const tip = document.createElement("small");
+    tip.textContent = unlocked >= POKEMON.length ? "도감을 완성했어요!" : "별을 모을 때마다 새로운 연구가 열려요.";
+    progress.append(progressLabel, progressTrack);
+    copy.append(kicker, title, message, progress, stats, tip);
+    detail.append(oak, copy);
     showScreen("pokedex");
 }
 async function loadPokedexDetail(pokemon, selected) {
@@ -835,6 +871,7 @@ async function loadPokedexDetail(pokemon, selected) {
     selected.classList.add("selected");
     const detail = byId("pokedexDetail");
     detail.replaceChildren();
+    detail.classList.remove("pokedex-intro");
     if (window.matchMedia("(max-width: 700px)").matches) {
         window.requestAnimationFrame(() => detail.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
@@ -862,6 +899,20 @@ async function loadPokedexDetail(pokemon, selected) {
         number.textContent = "No." + String(pokemon.id).padStart(3, "0") + " · " + genus;
         const title = document.createElement("h3");
         title.textContent = pokemon.name;
+        const typeArtwork = document.createElement("div");
+        typeArtwork.className = "pokedex-type-artwork";
+        typeArtwork.setAttribute("aria-label", data.types.map((entry) => TYPE_NAMES[entry.type.name] ?? entry.type.name).join(", ") + " 타입");
+        data.types.forEach((entry) => {
+            const typeName = entry.type.name;
+            const typeImage = document.createElement("img");
+            typeImage.src = typeIconUrl(typeName);
+            typeImage.alt = (TYPE_NAMES[typeName] ?? typeName) + " 타입";
+            typeImage.loading = "lazy";
+            typeImage.addEventListener("error", () => {
+                typeImage.replaceWith(Object.assign(document.createElement("span"), { textContent: TYPE_NAMES[typeName] ?? typeName }));
+            }, { once: true });
+            typeArtwork.append(typeImage);
+        });
         const types = document.createElement("p");
         types.className = "pokedex-types";
         types.textContent = data.types.map((entry) => TYPE_NAMES[entry.type.name] ?? entry.type.name).join(" · ");
@@ -878,7 +929,7 @@ async function loadPokedexDetail(pokemon, selected) {
         const description = document.createElement("p");
         description.className = "pokedex-description";
         description.textContent = flavor;
-        detail.append(image, heading, facts, description);
+        detail.append(typeArtwork, image, heading, facts, description);
     }
     catch {
         detail.replaceChildren();
