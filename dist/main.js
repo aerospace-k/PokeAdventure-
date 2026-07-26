@@ -1,4 +1,47 @@
 "use strict";
+/* Keep game loops fair when a phone locks or the browser moves to the background. */
+const nativeSetInterval = window.setInterval.bind(window);
+const nativeRequestAnimationFrame = window.requestAnimationFrame.bind(window);
+const nativeCancelAnimationFrame = window.cancelAnimationFrame.bind(window);
+let lifecycleHiddenAt = document.hidden ? performance.now() : null;
+let lifecycleAnimationOffset = 0;
+let lifecycleFrameSequence = 0;
+const lifecycleFrames = new Map();
+window.setInterval = ((handler, timeout, ...args) => nativeSetInterval(() => {
+    if (!document.hidden && typeof handler === "function")
+        handler(...args);
+}, timeout));
+window.requestAnimationFrame = ((callback) => {
+    const frameId = ++lifecycleFrameSequence;
+    const run = (timestamp) => {
+        if (!lifecycleFrames.has(frameId))
+            return;
+        if (document.hidden) {
+            lifecycleFrames.set(frameId, nativeRequestAnimationFrame(run));
+            return;
+        }
+        lifecycleFrames.delete(frameId);
+        callback(timestamp - lifecycleAnimationOffset);
+    };
+    lifecycleFrames.set(frameId, nativeRequestAnimationFrame(run));
+    return frameId;
+});
+window.cancelAnimationFrame = ((frameId) => {
+    const nativeFrameId = lifecycleFrames.get(frameId);
+    if (nativeFrameId !== undefined)
+        nativeCancelAnimationFrame(nativeFrameId);
+    lifecycleFrames.delete(frameId);
+});
+document.addEventListener("visibilitychange", () => {
+    document.documentElement.classList.toggle("app-background-paused", document.hidden);
+    if (document.hidden) {
+        lifecycleHiddenAt = performance.now();
+        return;
+    }
+    if (lifecycleHiddenAt !== null)
+        lifecycleAnimationOffset += performance.now() - lifecycleHiddenAt;
+    lifecycleHiddenAt = null;
+});
 const POKEMON = [
     { id: 25, name: "피카츄" }, { id: 133, name: "이브이" }, { id: 4, name: "파이리" },
     { id: 1, name: "이상해씨" }, { id: 7, name: "꼬부기" }, { id: 151, name: "뮤" },
@@ -29,25 +72,25 @@ const POKEMON = [
     { id: 43, name: "뚜벅쵸" }, { id: 60, name: "발챙이" }
 ];
 const MODE_MASCOTS = {
-    quiz: 25, rain: 131, mole: 50, memory: 132, ox: 54, balloon: 39, space: 137, mine: 100, knowledge: 151,
-    symmetry: 132, coordinate: 137, history: 251, safety: 54, snack: 143
+    quiz: 25, rain: 129, mole: 50, memory: 132, ox: 54, balloon: 39, space: 722, mine: 100, knowledge: 151,
+    symmetry: 417, coordinate: 137, history: 60, safety: 7, snack: 143
 };
 const GRADES = [
-    { name: "유치원", description: "10 이내 더하기와 빼기" },
-    { name: "1학년", description: "한 자리 수와 20 이내 계산" },
-    { name: "2학년", description: "두 자리 계산과 곱셈구구" },
-    { name: "3학년", description: "곱셈과 나눗셈" },
-    { name: "4학년", description: "큰 수 곱셈과 나눗셈" },
-    { name: "5학년", description: "자연수 혼합 계산" },
-    { name: "6학년", description: "혼합 계산 종합" }
+    { name: "유치원", description: "놀이로 만나는 수·모양·생활 기초" },
+    { name: "1학년", description: "관찰하고 비교하는 기초 탐험" },
+    { name: "2학년", description: "규칙을 찾고 생각을 넓히는 탐험" },
+    { name: "3학년", description: "수·공간·지식을 연결하는 탐험" },
+    { name: "4학년", description: "논리와 생활 지식을 키우는 탐험" },
+    { name: "5학년", description: "여러 영역을 전략적으로 해결하는 탐험" },
+    { name: "6학년", description: "배운 내용을 통합하는 종합 탐험" }
 ];
 const MODES = {
     quiz: {
-        name: "암산 퀴즈", description: "주관식과 객관식 10문제",
+        name: "피카츄 암산퀴즈", description: "주관식과 객관식 10문제",
         hint: "직접 입력과 보기 선택이 섞여 나와요.", colors: ["#438fff", "#5f62df"], category: "암산·수 연산"
     },
     rain: {
-        name: "산성비 챌린지", description: "천천히 떨어지는 문제를 해결해요",
+        name: "잉어킹 산성비 챌린지", description: "천천히 떨어지는 문제를 해결해요",
         hint: "땅에 닿기 전에 답을 입력해요. 후반에도 입력 시간이 충분하도록 조정했어요.", colors: ["#6f74e8", "#4354bc"], category: "암산·수 연산"
     },
     mole: {
@@ -55,20 +98,20 @@ const MODES = {
         hint: "목표 식이 바뀌면 디그다도 모두 새로 나와요.", colors: ["#f39a4b", "#d96d38"], category: "암산·수 연산"
     },
     memory: {
-        name: "포켓몬 메모리", description: "같은 포켓몬 카드를 찾아요",
-        hint: "카드 위치를 기억해 같은 포켓몬 두 장을 맞혀 보세요.", colors: ["#2eb988", "#198363"], category: "미니게임"
+        name: "메타몽 메모리 게임", description: "변신한 메타몽의 같은 포켓몬 짝을 찾아요",
+        hint: "메타몽이 변신한 카드 위치를 기억하고 연속으로 짝을 맞혀 변신 에너지를 채워요.", colors: ["#df78c8", "#8a5bc2"], category: "미니게임"
     },
     ox: {
-        name: "참·거짓 OX", description: "식과 답이 맞는지 판단해요",
+        name: "고라파덕 참·거짓 OX", description: "식과 답이 맞는지 판단해요",
         hint: "식을 끝까지 계산한 다음 O 또는 X를 선택해요.", colors: ["#f06b8f", "#c9466b"], category: "암산·수 연산"
     },
     balloon: {
-        name: "풍선 터뜨리기", description: "정답 풍선을 찾아 터뜨려요",
+        name: "푸린 풍선 터뜨리기", description: "정답 풍선을 찾아 터뜨려요",
         hint: "목표 식의 답과 같은 숫자가 적힌 풍선을 선택해요.", colors: ["#35b6d2", "#2584ae"], category: "암산·수 연산"
     },
     space: {
-        name: "도형·공간 탐험", description: "회전·방향·쌓기나무·전개도",
-        hint: "눈으로 돌리고 접어 보며 공간 감각을 길러요.", colors: ["#26a69a", "#1565a7"], category: "도형·공간"
+        name: "나몰빼미의 도형·공간 탐험", description: "회전·위에서 본 모습·쌓기나무·전개도",
+        hint: "나몰빼미와 여러 방향에서 관찰하고 접어 보며 공간 감각을 길러요.", colors: ["#26a69a", "#1565a7"], category: "도형·공간"
     },
     mine: {
         name: "찌리리공 초원 탐색", description: "숫자 단서로 풀숲의 찌리리공 찾기",
@@ -79,19 +122,19 @@ const MODES = {
         hint: "학년에 맞는 네 영역을 여행하며 정답과 함께 짧은 해설을 배워요.", colors: ["#20a878", "#1478a8"], category: "지식탐험"
     },
     symmetry: {
-        name: "메타몽 대칭 연구소", description: "반쪽 모양을 보고 좌우대칭을 완성해요",
-        hint: "칸을 직접 눌러 거울에 비친 것처럼 같은 모양을 만들어요.", colors: ["#df6cc8", "#8a58c7"], category: "도형·공간"
+        name: "파치리스의 대칭 연구소", description: "전기 회로의 반쪽을 보고 좌우대칭을 완성해요",
+        hint: "대칭축에서 같은 거리의 칸을 연결해 파치리스의 전기 에너지를 채워요.", colors: ["#52c8e8", "#3976c8"], category: "도형·공간"
     },
     coordinate: {
         name: "폴리곤 좌표 미로", description: "격자와 좌표를 읽어 목표까지 이동해요",
         hint: "장애물을 피하고 방향 버튼으로 폴리곤을 움직여요.", colors: ["#2f9cc7", "#4965c7"], category: "도형·공간"
     },
     history: {
-        name: "세레비 역사 시간여행", description: "역사 사건을 오래된 순서로 복원해요",
-        hint: "사건 카드를 차례대로 선택하며 시간의 흐름을 익혀요.", colors: ["#56b76a", "#278574"], category: "지식탐험"
+        name: "발챙이 역사 시간여행", description: "발챙이와 역사 사건을 오래된 순서로 복원해요",
+        hint: "가장 오래된 사건부터 고르면 연속 정답 보너스를 받아요.", colors: ["#55bce7", "#3278c6"], category: "지식탐험"
     },
     safety: {
-        name: "고라파덕 생활안전 구조대", description: "생활 속 위기에서 안전한 행동을 찾아요",
+        name: "꼬부기 생활안전 구조대", description: "생활 속 위기에서 안전한 행동을 찾아요",
         hint: "교통·재난·응급·인터넷 상황에서 가장 안전한 선택을 해요.", colors: ["#f2b843", "#e27a4c"], category: "지식탐험"
     },
     snack: {
@@ -111,13 +154,13 @@ const TIPS = [
     "식을 한 번 소리 내어 읽으면 실수를 줄일 수 있어요."
 ];
 const HELP = [
-    ["암산 퀴즈", "10문제를 풀어요. 빠르고 연속으로 맞히면 추가 점수를 받아요."],
-    ["산성비 챌린지", "문제가 땅에 닿기 전에 답을 입력해요. 쉬움은 약 20초의 초기 낙하 시간이 제공돼요."],
+    ["피카츄 암산퀴즈", "10문제를 풀어요. 빠르고 연속으로 맞히면 추가 점수를 받아요."],
+    ["잉어킹 산성비 챌린지", "문제가 땅에 닿기 전에 답을 입력해요. 쉬움은 약 20초의 초기 낙하 시간이 제공돼요."],
     ["디그다 찾기", "목표 식의 정답을 든 디그다를 선택해요. 문제 변경 시 화면의 디그다도 함께 바뀌어요."],
     ["짝맞추기", "식 카드와 답 카드를 짝지어요. 게임을 나가면 남은 예약 동작도 안전하게 종료돼요."],
-    ["참·거짓 OX", "제시된 식과 답이 맞는지 판단해요. 오답 감점으로 0초가 되면 즉시 끝나요."],
-    ["풍선 터뜨리기", "정답 풍선을 터뜨려 60초 동안 높은 점수에 도전해요."],
-    ["도형·공간 탐험", "도형 회전, 방향 변화, 쌓기나무, 정육면체 전개도를 학년과 진행 단계에 맞춰 해결해요."],
+    ["고라파덕 참·거짓 OX", "제시된 식과 답이 맞는지 판단해요. 오답 감점으로 0초가 되면 즉시 끝나요."],
+    ["푸린 풍선 터뜨리기", "정답 풍선을 터뜨려 60초 동안 높은 점수에 도전해요."],
+    ["나몰빼미의 도형·공간 탐험", "도형 회전, 위에서 내려다본 모습, 쌓기나무, 거울 대칭과 정육면체 전개도를 학년에 맞춰 해결해요."],
     ["찌리리공 지뢰찾기", "숫자 단서를 보고 안전한 칸을 열어요. 오른쪽 클릭이나 표시 모드로 찌리리공 위치에 몬스터볼을 놓아요."]
 ];
 const VALID_MODES = new Set(Object.keys(MODES));
@@ -1423,7 +1466,7 @@ function finishQuiz() {
     const accuracy = Math.round(game.correct / 10 * 100);
     const stars = accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : accuracy >= 40 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "quiz", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.correct + "/10 · " + accuracy + "%", timestamp: Date.now() });
-    showResult(stars, "암산 퀴즈 완료", accuracy + "%를 맞혔어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/10", "정답"], [String(game.best), "최고 연속"]]);
+    showResult(stars, "피카츄 암산퀴즈 완료", accuracy + "%를 맞혔어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/10", "정답"], [String(game.best), "최고 연속"]]);
 }
 let rain = null;
 const RAIN_CONFIG = {
@@ -1582,7 +1625,7 @@ function finishRain() {
     const seconds = Math.floor((performance.now() - game.started) / 1000);
     const stars = game.popped >= 18 ? 3 : game.popped >= 10 ? 2 : game.popped >= 4 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "rain", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.popped + "개 · " + seconds + "초", timestamp: Date.now() });
-    showResult(stars, "산성비 방어 완료", game.popped + "개의 문제를 막았어요.", [[String(game.score), "점수"], [String(game.popped), "해결"], [seconds + "초", "생존"], [String(game.wave), "단계"]]);
+    showResult(stars, "잉어킹 산성비 챌린지 완료", game.popped + "개의 문제를 막았어요.", [[String(game.score), "점수"], [String(game.popped), "해결"], [seconds + "초", "생존"], [String(game.wave), "단계"]]);
 }
 let mole = null;
 const MOLE_CONFIG = {
@@ -1770,7 +1813,8 @@ function memoryDelay(callback, delay) {
 function startMemory() {
     const session = ++memorySession;
     const pool = shuffle(MEMORY_POKEMON_IDS.map((id) => pokemonById(id)));
-    memory = { running: true, session, cards: [], first: null, locked: false, moves: 0, matched: 0, totalMatched: 0, pairs: 3, round: 0, score: 0, started: performance.now(), pool, timeouts: new Set(), countdown: null };
+    memory = { running: true, session, cards: [], first: null, locked: false, moves: 0, matched: 0, totalMatched: 0, pairs: 3, round: 0, score: 0, combo: 0, bestCombo: 0, started: performance.now(), pool, timeouts: new Set(), countdown: null };
+    replaceWithPokemon(byId("memoryMascot"), 132);
     buildMemoryRound(0);
     renderMemoryHud();
     showScreen("memory");
@@ -1797,6 +1841,8 @@ function buildMemoryRound(round) {
     memory.first = null;
     memory.locked = false;
     memory.cards = [];
+    byId("memoryRound").textContent = `${round + 1}단계 변신`;
+    byId("memoryStatus").textContent = round === 0 ? "먼저 카드를 보고 메타몽의 변신 위치를 기억해요." : `${config.pairs}가지 포켓몬으로 변신했어요. 같은 짝을 찾아요!`;
     const roundPokemon = memory.pool.slice(config.offset, config.offset + config.pairs);
     const rawCards = [];
     roundPokemon.forEach((pokemon, index) => {
@@ -1867,10 +1913,16 @@ function flipMemoryCard(index) {
         card.element.classList.add("matched");
         memory.matched += 1;
         memory.totalMatched += 1;
-        memory.score += 100;
+        memory.combo += 1;
+        memory.bestCombo = Math.max(memory.bestCombo, memory.combo);
+        const transformBonus = memory.combo % 3 === 0;
+        memory.score += 100 + memory.combo * 20 + (transformBonus ? 150 : 0);
+        byId("memoryStatus").textContent = transformBonus ? "메타몽 변신 보너스! 3연속 매치 +150" : `${card.pokemon.name} 변신 성공! 다음 짝도 이어서 찾아요.`;
         correctSound();
         playPokemonCry(card.pokemon.id, .13);
         pokemonSparkBurst(7);
+        if (transformBonus)
+            playPokemonCry(132, .15);
         renderMemoryHud();
         if (memory.matched >= memory.pairs) {
             if (memory.round < 2)
@@ -1881,6 +1933,8 @@ function flipMemoryCard(index) {
     }
     else {
         memory.locked = true;
+        memory.combo = 0;
+        byId("memoryStatus").textContent = "서로 다른 변신이에요. 두 카드의 위치를 기억해요!";
         first.element.classList.add("mismatch");
         card.element.classList.add("mismatch");
         wrongSound();
@@ -1904,6 +1958,9 @@ function renderMemoryHud() {
     byId("memoryMoves").textContent = String(memory.moves);
     byId("memoryMatched").textContent = String(memory.totalMatched);
     byId("memoryTotal").textContent = "17";
+    byId("memoryCombo").textContent = String(memory.combo);
+    byId("memoryTransformBar").style.width = `${memory.totalMatched / 17 * 100}%`;
+    byId("memoryTransformText").textContent = `${memory.totalMatched} / 17`;
     const remaining = Math.max(0, MAX_GAME_SECONDS - Math.floor((performance.now() - memory.started) / 1000));
     byId("memoryTime").textContent = Math.floor(remaining / 60) + ":" + String(remaining % 60).padStart(2, "0");
 }
@@ -1917,7 +1974,7 @@ function finishMemory(timedOut = false) {
     const stars = timedOut ? (completion >= .75 ? 2 : completion >= .4 ? 1 : 0) : ratio >= .7 ? 3 : ratio >= .5 ? 2 : ratio >= .34 ? 1 : 0;
     stopMemory();
     saveRecord({ name: getName() || "친구", mode: "memory", grade: state.grade, diff: state.diff, score: game.score + stars * 100, stars, detail: game.totalMatched + "/17쌍 · " + game.moves + "번", timestamp: Date.now() });
-    showResult(stars, timedOut ? "포켓몬 메모리 도전 완료" : "포켓몬 메모리 완료", timedOut ? game.totalMatched + "쌍을 찾았어요." : "포켓몬 17쌍을 모두 찾았어요!", [[String(game.score + stars * 100), "점수"], [String(game.moves), "뒤집기"], [seconds + "초", "시간"], [game.totalMatched + "/17", "완성"]]);
+    showResult(stars, timedOut ? "메타몽 변신 도전 완료" : "메타몽 메모리 완성!", timedOut ? game.totalMatched + "쌍의 변신을 찾았어요." : "메타몽의 포켓몬 변신 17쌍을 모두 찾았어요!", [[String(game.score + stars * 100), "점수"], [String(game.moves), "뒤집기"], [String(game.bestCombo), "최고 연속"], [game.totalMatched + "/17", "변신 완성"]]);
 }
 let ox = null;
 function stopOx() {
@@ -2032,7 +2089,7 @@ function finishOx() {
     stopOx();
     const stars = game.correct >= 20 ? 3 : game.correct >= 12 ? 2 : game.correct >= 6 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "ox", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.correct + "개", timestamp: Date.now() });
-    showResult(stars, "OX 판단 완료", game.correct + "개를 맞혔어요.", [[String(game.score), "점수"], [String(game.correct), "정답"], [String(game.best), "최고 연속"], ["60초", "시간"]]);
+    showResult(stars, "고라파덕 참·거짓 OX 완료", game.correct + "개를 맞혔어요.", [[String(game.score), "점수"], [String(game.correct), "정답"], [String(game.best), "최고 연속"], ["60초", "시간"]]);
 }
 let balloon = null;
 const BALLOON_CONFIG = {
@@ -2104,14 +2161,16 @@ function spawnBalloon() {
     element.type = "button";
     element.className = `balloon${bonus ? " bonus" : ""}`;
     element.style.setProperty("--balloon-accent", choose(["#ff6b7d", "#f39a4b", "#438fff", "#24b47e", "#8b6fe8", "#2ba9c9"]));
-    const artwork = pokemonMedia({ id: 39, name: "푸린" }, "balloon-pokemon");
+    const balloonPokemon = bonus ? { id: 40, name: "푸크린" } : { id: 39, name: "푸린" };
+    const artwork = pokemonMedia(balloonPokemon, "balloon-pokemon");
     artwork.setAttribute("aria-hidden", "true");
     const number = document.createElement("span");
     number.className = "balloon-number";
     number.textContent = String(value);
-    element.setAttribute("aria-label", "푸린 " + value);
+    element.setAttribute("aria-label", balloonPokemon.name + "의 숫자 풍선 " + value + (bonus ? ", 보너스 500점" : ""));
     element.append(artwork, number);
-    element.style.left = randomInt(55, Math.max(60, field.clientWidth - 55)) + "px";
+    const sideMargin = bonus ? 82 : 70;
+    element.style.left = randomInt(sideMargin, Math.max(sideMargin + 1, field.clientWidth - sideMargin)) + "px";
     element.style.top = field.clientHeight + "px";
     const item = { element, value, y: field.clientHeight, bonus };
     element.addEventListener("click", () => popBalloon(item));
@@ -2136,13 +2195,13 @@ function popBalloon(item) {
         window.setTimeout(() => item.element.remove(), 250);
         const nextCombo = balloon.combo + 1;
         const fever = nextCombo >= 8;
-        const baseScore = item.bonus ? 400 : 100;
+        const baseScore = item.bonus ? 500 : 100;
         balloon.score += (baseScore + balloon.combo * 10) * (fever ? 2 : 1);
         balloon.combo = nextCombo;
         byId("balloonFever").textContent = fever ? "FEVER x2" : `${nextCombo} / 8`;
         byId("balloonField").classList.toggle("fever", fever);
         if (item.bonus)
-            playPokemonCry(39);
+            playPokemonCry(40, .16);
         balloon.best = Math.max(balloon.best, balloon.combo);
         balloon.popped += 1;
         balloon.target = newProblem(difficultyForElapsed(balloon.started, 60));
@@ -2186,7 +2245,7 @@ function finishBalloon() {
     stopBalloon();
     const stars = game.popped >= 22 ? 3 : game.popped >= 13 ? 2 : game.popped >= 6 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "balloon", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.popped + "개", timestamp: Date.now() });
-    showResult(stars, "풍선 게임 완료", game.popped + "개의 정답 풍선을 터뜨렸어요.", [[String(game.score), "점수"], [String(game.popped), "정답"], [String(game.best), "최고 연속"], ["60초", "시간"]]);
+    showResult(stars, "푸린 풍선 터뜨리기 완료", game.popped + "개의 정답 풍선을 터뜨렸어요.", [[String(game.score), "점수"], [String(game.popped), "정답"], [String(game.best), "최고 연속"], ["60초", "시간"]]);
 }
 let space = null;
 const SHAPE_LABELS = {
@@ -2526,10 +2585,10 @@ function makeNetQuestion() {
 }
 function spaceKindsForGrade(grade) {
     if (grade <= 1)
-        return ["shape", "rotation", "pattern", "mirror"];
+        return ["shape", "topview", "rotation", "pattern", "mirror"];
     if (grade <= 4)
-        return ["shape", "rotation", "pattern", "blocks", "mirror", "topview"];
-    return ["shape", "rotation", "pattern", "blocks", "mirror", "topview", "net"];
+        return ["shape", "topview", "rotation", "blocks", "mirror", "topview", "pattern"];
+    return ["shape", "topview", "rotation", "blocks", "mirror", "net", "topview", "pattern"];
 }
 function makeSpaceQuestion(index) {
     const kinds = spaceKindsForGrade(state.grade ?? 0);
@@ -2812,7 +2871,7 @@ function startSymmetry() {
         return;
     const size = state.grade <= 1 ? 4 : state.grade <= 3 ? 6 : 8;
     symmetry = { running: true, round: 0, score: 0, mistakes: 0, size, source: new Set(), target: new Set(), selected: new Set(), started: Date.now() };
-    replaceWithPokemon(byId("symmetryMascot"), 132);
+    replaceWithPokemon(byId("symmetryMascot"), 417);
     showScreen("symmetry");
     setupSymmetryRound();
 }
@@ -2843,6 +2902,8 @@ function setupSymmetryRound() {
         symmetry.target.add("1," + (symmetry.size - 2));
         symmetry.target.add((symmetry.size - 1) + "," + (symmetry.size - 1));
     }
+    byId("symmetryStatus").textContent = "왼쪽 전기 무늬를 대칭축 건너편에 똑같이 연결해요.";
+    byId("screen-symmetry").classList.remove("circuit-complete", "circuit-error");
     renderSymmetry();
 }
 function renderSymmetry() {
@@ -2851,6 +2912,8 @@ function renderSymmetry() {
     byId("symmetryScore").textContent = String(symmetry.score);
     byId("symmetryRound").textContent = (symmetry.round + 1) + "/5";
     byId("symmetryMistakes").textContent = String(symmetry.mistakes);
+    byId("symmetryChargeBar").style.width = `${symmetry.round / 5 * 100}%`;
+    byId("symmetryChargeText").textContent = `${symmetry.round} / 5`;
     const grid = byId("symmetryGrid");
     grid.style.setProperty("--symmetry-size", String(symmetry.size));
     grid.replaceChildren();
@@ -2877,6 +2940,27 @@ function renderSymmetry() {
         }
     }
 }
+function useSymmetryHint() {
+    if (!symmetry?.running)
+        return;
+    const wrong = Array.from(symmetry.selected).find((key) => !symmetry?.target.has(key));
+    if (wrong) {
+        symmetry.selected.delete(wrong);
+        byId("symmetryStatus").textContent = "파치리스가 잘못 연결된 전기 칸 하나를 찾아냈어요!";
+    }
+    else {
+        const missing = Array.from(symmetry.target).find((key) => !symmetry?.selected.has(key));
+        if (!missing) {
+            byId("symmetryStatus").textContent = "모든 회로가 연결됐어요. 회로 확인을 눌러요!";
+            return;
+        }
+        symmetry.selected.add(missing);
+        byId("symmetryStatus").textContent = "파치리스가 정답 칸 하나에 전기를 연결했어요!";
+    }
+    symmetry.score = Math.max(0, symmetry.score - 50);
+    pokemonSparkBurst(417);
+    renderSymmetry();
+}
 function checkSymmetry() {
     if (!symmetry?.running)
         return;
@@ -2884,12 +2968,18 @@ function checkSymmetry() {
     if (correct) {
         symmetry.score += 200 + symmetry.round * 40;
         symmetry.round += 1;
+        byId("symmetryStatus").textContent = "대칭 회로 연결 성공! 파치리스의 에너지가 충전됐어요.";
+        byId("screen-symmetry").classList.add("circuit-complete");
         correctSound();
-        pokemonSparkBurst(8);
+        pokemonSparkBurst(417);
+        if (symmetry.round === 5)
+            playPokemonCry(417);
         window.setTimeout(setupSymmetryRound, 650);
     }
     else {
         symmetry.mistakes += 1;
+        byId("symmetryStatus").textContent = "회로가 어긋났어요. 대칭축에서 같은 거리인지 다시 살펴봐요.";
+        byId("screen-symmetry").classList.add("circuit-error");
         wrongSound();
         showToast("대칭축을 기준으로 같은 거리를 살펴보세요.");
     }
@@ -2902,7 +2992,7 @@ function finishSymmetry() {
     stopSymmetry();
     const stars = game.mistakes <= 1 ? 3 : game.mistakes <= 4 ? 2 : game.mistakes <= 8 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "symmetry", grade: state.grade, diff: "easy", score: game.score, stars, detail: "5단계 · 실수 " + game.mistakes, timestamp: Date.now() });
-    showResult(stars, "대칭 연구 완료!", "메타몽의 대칭 모양 5개를 완성했어요.", [[String(game.score), "점수"], [String(game.mistakes), "실수"], [String(game.size) + "×" + game.size, "격자"], ["5/5", "완성"]]);
+    showResult(stars, "전기 대칭 연구 완료!", "파치리스의 대칭 회로 5개를 모두 연결했어요.", [[String(game.score), "점수"], [String(game.mistakes), "실수"], [String(game.size) + "×" + game.size, "격자"], ["5/5", "충전"]]);
 }
 let coordinate = null;
 function stopCoordinate() { if (coordinate)
@@ -3026,8 +3116,8 @@ function startHistory() {
     const grade = state.grade;
     const pool = HISTORY_EVENTS.filter((event) => event.minGrade <= grade);
     const events = shuffle([...pool]).slice(0, Math.min(8, pool.length));
-    historyGame = { running: true, events, remaining: new Set(events.map((event) => event.year)), score: 0, mistakes: 0, started: Date.now() };
-    replaceWithPokemon(byId("historyMascot"), 251);
+    historyGame = { running: true, events, remaining: new Set(events.map((event) => event.year)), score: 0, mistakes: 0, streak: 0, bestStreak: 0, lastWrongYear: null, started: Date.now() };
+    replaceWithPokemon(byId("historyMascot"), 60);
     showScreen("history");
     renderHistory();
 }
@@ -3037,24 +3127,40 @@ function renderHistory() {
     const completed = historyGame.events.length - historyGame.remaining.size;
     byId("historyScore").textContent = String(historyGame.score);
     byId("historyCount").textContent = completed + "/" + historyGame.events.length;
+    byId("historyStreak").textContent = String(historyGame.streak);
     byId("historyMistakes").textContent = String(historyGame.mistakes);
+    byId("historyMissionText").textContent = completed ? completed + "개의 시대를 연결했어요" : "첫 사건을 찾아보세요";
     const timeline = byId("historyTimeline");
     timeline.replaceChildren();
-    historyGame.events.filter((event) => !historyGame?.remaining.has(event.year)).sort((a, b) => a.year - b.year).forEach((event) => { const chip = document.createElement("span"); chip.innerHTML = "<b>" + event.yearLabel + "</b>" + event.label; timeline.append(chip); });
+    historyGame.events.filter((event) => !historyGame?.remaining.has(event.year)).sort((a, b) => a.year - b.year).forEach((event, index) => { const chip = document.createElement("span"); chip.className = "history-era-chip"; chip.innerHTML = "<i>" + String(index + 1).padStart(2, "0") + "</i><b>" + event.yearLabel + "</b>" + event.label; timeline.append(chip); });
+    if (!completed) {
+        const empty = document.createElement("span");
+        empty.className = "history-timeline-empty";
+        empty.textContent = "사건을 맞히면 이곳에 시간의 길이 이어져요.";
+        timeline.append(empty);
+    }
     const cards = byId("historyCards");
     cards.replaceChildren();
-    historyGame.events.filter((event) => historyGame?.remaining.has(event.year)).forEach((event) => { const button = document.createElement("button"); button.type = "button"; button.className = "history-card"; button.textContent = event.label; button.addEventListener("click", () => chooseHistoryEvent(event, button)); cards.append(button); });
+    historyGame.events.filter((event) => historyGame?.remaining.has(event.year)).forEach((event, index) => { const button = document.createElement("button"); button.type = "button"; button.className = "history-card"; if (historyGame?.lastWrongYear === event.year)
+        button.classList.add("history-card-retry"); button.innerHTML = "<span>사건 " + String(index + 1).padStart(2, "0") + "</span><b>" + event.label + "</b>"; button.addEventListener("click", () => chooseHistoryEvent(event, button)); cards.append(button); });
 }
 function chooseHistoryEvent(event, button) {
     if (!historyGame?.running)
         return;
     const earliest = Math.min(...Array.from(historyGame.remaining));
+    const feedback = byId("historyFeedback");
     if (event.year === earliest) {
         historyGame.remaining.delete(event.year);
-        historyGame.score += 140;
+        historyGame.streak += 1;
+        historyGame.bestStreak = Math.max(historyGame.bestStreak, historyGame.streak);
+        historyGame.lastWrongYear = null;
+        const bonus = Math.min(100, (historyGame.streak - 1) * 20);
+        historyGame.score += 140 + bonus;
         button.classList.add("correct");
         correctSound();
-        byId("historyFeedback").textContent = event.yearLabel + " · 시간의 길을 찾았어요!";
+        pokemonSparkBurst(10);
+        feedback.dataset.status = "correct";
+        feedback.textContent = event.yearLabel + " · 시간 물결 연결!" + (bonus ? " 연속 보너스 +" + bonus : "");
         if (!historyGame.remaining.size) {
             window.setTimeout(finishHistory, 700);
             return;
@@ -3062,9 +3168,13 @@ function chooseHistoryEvent(event, button) {
     }
     else {
         historyGame.mistakes += 1;
+        historyGame.streak = 0;
+        historyGame.lastWrongYear = event.year;
         button.classList.add("wrong");
         wrongSound();
-        byId("historyFeedback").textContent = "이 사건보다 더 오래된 일을 먼저 찾아보세요.";
+        feedback.dataset.status = "wrong";
+        const earliestEvent = historyGame.events.find((item) => item.year === earliest);
+        feedback.textContent = "조금 더 과거로 가야 해요. 단서: " + (earliestEvent?.yearLabel ?? "더 오래된 시대");
     }
     renderHistory();
 }
@@ -3075,7 +3185,7 @@ function finishHistory() {
     stopHistory();
     const stars = game.mistakes <= 1 ? 3 : game.mistakes <= 4 ? 2 : game.mistakes <= 7 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "history", grade: state.grade, diff: "easy", score: game.score, stars, detail: game.events.length + "사건 · 실수 " + game.mistakes, timestamp: Date.now() });
-    showResult(stars, "역사 시간 복원 완료!", "세레비와 역사의 흐름을 되찾았어요.", [[String(game.score), "점수"], [String(game.events.length), "사건"], [String(game.mistakes), "실수"], ["완료", "시간여행"]]);
+    showResult(stars, "발챙이 시간 물결 복원!", "발챙이와 과거에서 현재까지 역사의 흐름을 연결했어요.", [[String(game.score), "점수"], [String(game.events.length), "복원 사건"], [String(game.bestStreak), "최고 연속"], [String(game.mistakes), "실수"]]);
 }
 const SAFETY_QUESTIONS = [
     { category: "교통안전", prompt: "횡단보도 신호가 초록불로 바뀌었어요. 가장 먼저 할 일은?", choices: ["좌우를 살피고 차가 멈췄는지 확인하기", "바로 뛰어가기", "휴대전화를 보며 걷기"], answer: 0, explanation: "초록불이어도 좌우를 보고 차량이 완전히 멈췄는지 확인해요.", minGrade: 0 },
@@ -3089,7 +3199,11 @@ const SAFETY_QUESTIONS = [
     { category: "인터넷", prompt: "친구 사진을 인터넷에 올리고 싶어요.", choices: ["친구에게 먼저 허락받기", "몰래 올리기", "이름만 지우고 바로 올리기"], answer: 0, explanation: "사진에는 초상권과 개인정보가 있으므로 당사자의 동의를 받아야 해요.", minGrade: 3 },
     { category: "재난안전", prompt: "태풍 때문에 하천 물이 빠르게 불어나고 있어요.", choices: ["하천에서 멀리 떨어진 안전한 곳으로 이동하기", "가까이 가서 촬영하기", "다리를 건너 확인하기"], answer: 0, explanation: "불어난 물은 매우 위험하므로 하천과 지하 공간에서 즉시 멀어져요.", minGrade: 2 },
     { category: "전기안전", prompt: "콘센트 근처에 물이 쏟아졌어요.", choices: ["손대지 말고 어른에게 알리기", "젖은 손으로 닦기", "금속 물건을 넣어보기"], answer: 0, explanation: "감전 위험이 있으므로 젖은 손으로 만지지 말고 어른의 도움을 받아요.", minGrade: 0 },
-    { category: "약물안전", prompt: "정체를 모르는 약이 책상 위에 놓여 있어요.", choices: ["먹지 않고 어른에게 알리기", "맛을 보기", "친구와 나누기"], answer: 0, explanation: "약은 보호자나 의료인의 안내 없이 함부로 먹으면 안 돼요.", minGrade: 0 }
+    { category: "약물안전", prompt: "정체를 모르는 약이 책상 위에 놓여 있어요.", choices: ["먹지 않고 어른에게 알리기", "맛을 보기", "친구와 나누기"], answer: 0, explanation: "약은 보호자나 의료인의 안내 없이 함부로 먹으면 안 돼요.", minGrade: 0 },
+    { category: "자전거안전", prompt: "자전거를 타고 공원에 나가려고 해요. 꼭 먼저 해야 할 일은?", choices: ["안전모와 보호 장비 착용하기", "속도를 최대한 높이기", "이어폰을 크게 듣기"], answer: 0, explanation: "자전거를 탈 때는 안전모를 쓰고 주변 소리를 들으며 안전하게 이동해요.", minGrade: 0 },
+    { category: "폭염안전", prompt: "무더운 날 야외에서 친구가 어지럽다고 해요.", choices: ["그늘로 이동해 쉬고 어른에게 알리기", "계속 뛰게 하기", "두꺼운 옷을 입히기"], answer: 0, explanation: "시원한 곳으로 이동해 쉬게 하고 증상이 계속되면 즉시 도움을 요청해요.", minGrade: 1 },
+    { category: "승강기안전", prompt: "엘리베이터 문이 닫히려 할 때 장난감이 안에 떨어졌어요.", choices: ["문에 손을 넣지 않고 어른에게 알리기", "손으로 문을 막기", "문 사이로 뛰어들기"], answer: 0, explanation: "닫히는 문에 손이나 물건을 넣지 말고 관리인이나 어른에게 도움을 요청해요.", minGrade: 1 },
+    { category: "개인정보", prompt: "친구가 보낸 것처럼 보이는 링크에서 비밀번호를 입력하래요.", choices: ["누르지 않고 보호자에게 확인하기", "바로 비밀번호 입력하기", "친구들에게 다시 보내기"], answer: 0, explanation: "의심스러운 링크는 열지 말고 보낸 사람이나 보호자에게 먼저 확인해요.", minGrade: 2 }
 ];
 let safety = null;
 function stopSafety() { if (safety)
@@ -3100,7 +3214,7 @@ function startSafety() {
     const grade = state.grade;
     const questions = shuffle(SAFETY_QUESTIONS.filter((question) => question.minGrade <= grade)).slice(0, 10);
     safety = { running: true, questions, index: 0, score: 0, correct: 0, streak: 0, locked: false, started: Date.now() };
-    replaceWithPokemon(byId("safetyMascot"), 54);
+    replaceWithPokemon(byId("safetyMascot"), 7);
     showScreen("safety");
     nextSafety();
 }
@@ -3116,14 +3230,43 @@ function nextSafety() {
     byId("safetyScore").textContent = String(safety.score);
     byId("safetyCount").textContent = "상황 " + (safety.index + 1) + "/" + safety.questions.length;
     byId("safetyStreak").textContent = String(safety.streak);
-    byId("safetyCategory").textContent = question.category;
+    const category = byId("safetyCategory");
+    category.textContent = question.category;
+    category.dataset.icon = safetyCategoryIcon(question.category);
     byId("safetyQuestion").textContent = question.prompt;
     byId("safetyExplanation").replaceChildren();
-    byId("safetyReaction").textContent = "고라파덕과 안전한 행동을 찾아봐요.";
+    byId("safetyReaction").textContent = "꼬부기가 안전 순찰 중이에요. 가장 안전한 행동을 골라요!";
+    byId("screen-safety").classList.remove("rescue-success", "rescue-alert");
+    renderSafetyShield();
     const indexed = shuffle(question.choices.map((label, index) => ({ label, correct: index === question.answer })));
     const choices = byId("safetyChoices");
     choices.replaceChildren();
     indexed.forEach((item, index) => { const button = document.createElement("button"); button.type = "button"; button.className = "safety-choice"; button.textContent = item.label; button.addEventListener("click", () => answerSafety(item.correct, button, indexed)); choices.append(button); });
+}
+function safetyCategoryIcon(category) {
+    if (category.includes("교통") || category.includes("자전거"))
+        return "🚦";
+    if (category.includes("화재"))
+        return "🔥";
+    if (category.includes("물") || category.includes("폭염"))
+        return "💧";
+    if (category.includes("인터넷") || category.includes("개인정보"))
+        return "🔒";
+    if (category.includes("응급") || category.includes("약물"))
+        return "✚";
+    if (category.includes("지진") || category.includes("재난"))
+        return "⛑";
+    if (category.includes("전기") || category.includes("승강기"))
+        return "⚠";
+    return "🛡";
+}
+function renderSafetyShield() {
+    if (!safety)
+        return;
+    const total = Math.max(1, safety.questions.length);
+    byId("safetyShieldBar").style.width = `${safety.correct / total * 100}%`;
+    byId("safetyShieldText").textContent = `${safety.correct} / ${total}`;
+    document.querySelector("#screen-safety .safety-shield")?.classList.toggle("charged", safety.correct === total);
 }
 function answerSafety(correct, selected, indexed) {
     if (!safety?.running || safety.locked)
@@ -3135,20 +3278,28 @@ function answerSafety(correct, selected, indexed) {
     if (correct) {
         safety.correct += 1;
         safety.streak += 1;
-        safety.score += 120 + safety.streak * 10;
+        const patrolBonus = safety.streak % 3 === 0;
+        safety.score += 120 + safety.streak * 10 + (patrolBonus ? 100 : 0);
         selected.classList.add("correct");
-        byId("safetyReaction").textContent = "안전 선택 성공!";
+        byId("safetyReaction").textContent = patrolBonus ? "꼬부기 구조 보너스! 3연속 안전 선택 +100" : "안전 선택 성공! 꼬부기가 힘차게 물방울 방패를 채웠어요.";
+        byId("screen-safety").classList.add("rescue-success");
+        if (patrolBonus) {
+            pokemonSparkBurst(7);
+            playPokemonCry(7);
+        }
         correctSound();
     }
     else {
         safety.streak = 0;
         selected.classList.add("wrong");
-        byId("safetyReaction").textContent = "앗! 안전을 먼저 생각해요.";
+        byId("safetyReaction").textContent = "꼬부기가 위험 신호를 발견했어요. 설명을 보고 안전 행동을 기억해요.";
+        byId("screen-safety").classList.add("rescue-alert");
         wrongSound();
     }
     byId("safetyExplanation").textContent = question.explanation;
     byId("safetyScore").textContent = String(safety.score);
     byId("safetyStreak").textContent = String(safety.streak);
+    renderSafetyShield();
     window.setTimeout(() => { if (!safety?.running)
         return; safety.index += 1; nextSafety(); }, correct ? 1400 : 2300);
 }
@@ -3160,7 +3311,7 @@ function finishSafety() {
     const accuracy = Math.round(game.correct / game.questions.length * 100);
     const stars = accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : accuracy >= 40 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "safety", grade: state.grade, diff: "easy", score: game.score, stars, detail: game.correct + "/" + game.questions.length + " · 안전", timestamp: Date.now() });
-    showResult(stars, "생활안전 구조 완료!", "고라파덕과 " + game.correct + "개의 안전한 행동을 찾았어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/" + game.questions.length, "정답"], [String(game.streak), "마지막 연속"]]);
+    showResult(stars, "꼬부기 안전 순찰 완료!", "꼬부기와 " + game.correct + "개의 안전한 행동을 찾아 물방울 방패를 완성했어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/" + game.questions.length, "구조 성공"], [String(game.streak), "마지막 연속"]]);
 }
 const KNOWLEDGE_QUESTIONS = [
     { category: "과학", prompt: "식물이 건강하게 자라는 데 가장 필요한 것은 무엇일까요?", choices: ["햇빛과 물", "장난감", "연필", "모래시계"], answer: 0, explanation: "식물은 햇빛을 받아 양분을 만들고 뿌리로 물을 흡수해요.", minGrade: 0, maxGrade: 2, tier: 1 },
@@ -3877,28 +4028,70 @@ function openLeaderboard() {
 const HELP_CONTROLS = {
     quiz: "숫자판·보기 선택", rain: "숫자판 입력", mole: "디그다 터치", memory: "카드 뒤집기", ox: "O·X 선택", balloon: "푸린 터치", space: "도형 보기 선택", mine: "칸 열기·몬스터볼 표시", knowledge: "보기 선택", symmetry: "대칭 칸 채우기", coordinate: "방향 버튼", history: "사건 순서 선택", safety: "안전 행동 선택", snack: "터치·좌우 이동"
 };
-function openHelp(category = "all") {
-    cleanupGame();
-    setActiveNav("help");
-    document.querySelectorAll("[data-help-category]").forEach((button) => button.classList.toggle("active", button.dataset.helpCategory === category));
+const HELP_DURATIONS = {
+    quiz: "약 3~5분", rain: "최대 10분", mole: "60초", memory: "최대 10분", ox: "60초", balloon: "60초", space: "약 4~7분", mine: "약 5~10분", knowledge: "약 3~5분", symmetry: "약 3~6분", coordinate: "약 3~7분", history: "약 3~5분", safety: "약 3~5분", snack: "60초"
+};
+let activeHelpCategory = "all";
+function renderHelpCards() {
+    const query = byId("helpSearch").value.trim().toLocaleLowerCase("ko-KR");
+    const entries = Object.entries(MODES).filter(([, meta]) => {
+        const categoryMatch = activeHelpCategory === "all" || meta.category === activeHelpCategory;
+        const searchMatch = !query || `${meta.name} ${meta.description} ${meta.hint} ${meta.category}`.toLocaleLowerCase("ko-KR").includes(query);
+        return categoryMatch && searchMatch;
+    });
+    byId("helpResultCount").textContent = `${entries.length}개 게임`;
     const grid = byId("helpCards");
     grid.replaceChildren();
-    Object.entries(MODES).filter(([, meta]) => category === "all" || meta.category === category).forEach(([mode, meta]) => {
+    if (!entries.length) {
+        const empty = document.createElement("article");
+        empty.className = "help-empty";
+        empty.innerHTML = "<strong>일치하는 게임을 찾지 못했어요.</strong><p>다른 포켓몬 이름이나 학습 영역으로 검색해 보세요.</p>";
+        grid.append(empty);
+        return;
+    }
+    entries.forEach(([mode, meta], index) => {
         const card = document.createElement("article");
         card.className = "help-card help-game-card";
+        card.style.setProperty("--help-accent", meta.colors[0]);
+        const number = document.createElement("span");
+        number.className = "help-card-number";
+        number.textContent = String(index + 1).padStart(2, "0");
         const mascot = document.createElement("div");
         mascot.className = "help-mascot";
         mascot.append(pokemonAvatarMedia({ id: MODE_MASCOTS[mode], name: meta.name }));
+        const copy = document.createElement("div");
+        copy.className = "help-card-copy";
+        const category = document.createElement("span");
+        category.className = "help-category";
+        category.textContent = meta.category;
         const heading = document.createElement("h3");
         heading.textContent = meta.name;
-        const paragraph = document.createElement("p");
-        paragraph.textContent = meta.hint;
+        const goal = document.createElement("p");
+        goal.className = "help-goal";
+        goal.innerHTML = `<b>목표</b>${meta.description}`;
+        const tip = document.createElement("p");
+        tip.className = "help-tip";
+        tip.innerHTML = `<b>TIP</b>${meta.hint}`;
+        copy.append(category, heading, goal, tip);
         const chips = document.createElement("div");
         chips.className = "help-chips";
-        [meta.category, HELP_CONTROLS[mode], "최대 10분"].forEach((label) => { const chip = document.createElement("span"); chip.textContent = label; chips.append(chip); });
-        card.append(mascot, heading, paragraph, chips);
+        [["조작", HELP_CONTROLS[mode]], ["시간", HELP_DURATIONS[mode]], ["난이도", "자동 조절"]].forEach(([label, value]) => { const chip = document.createElement("span"); chip.innerHTML = `<small>${label}</small>${value}`; chips.append(chip); });
+        const play = document.createElement("button");
+        play.type = "button";
+        play.className = "help-play";
+        play.textContent = "게임 선택으로";
+        play.addEventListener("click", openGrades);
+        card.append(number, mascot, copy, chips, play);
         grid.append(card);
     });
+}
+function openHelp(category = "all") {
+    cleanupGame();
+    setActiveNav("help");
+    activeHelpCategory = category;
+    document.querySelectorAll("[data-help-category]").forEach((button) => button.classList.toggle("active", button.dataset.helpCategory === category));
+    byId("helpSearch").value = "";
+    renderHelpCards();
     showScreen("help");
 }
 function openAbout() {
@@ -3998,6 +4191,7 @@ function buildBackground() {
     });
 }
 function pokemonSparkBurst(count) {
+    count = Math.max(0, Math.min(48, Math.floor(count)));
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
         return;
     for (let index = 0; index < count; index += 1) {
@@ -4013,7 +4207,7 @@ function pokemonSparkBurst(count) {
 }
 function decorateGameScreens() {
     const screenPokemon = {
-        "screen-quiz": 25, "screen-rain": 131, "screen-mole": 50, "screen-memory": 132,
+        "screen-quiz": 25, "screen-rain": 129, "screen-mole": 50, "screen-memory": 132,
         "screen-ox": 54, "screen-balloon": 39, "screen-mine": 100
     };
     Object.entries(screenPokemon).forEach(([screenId, pokemonId]) => {
@@ -4116,6 +4310,7 @@ function bindEvents() {
     byId("dashboardToday").addEventListener("click", openToday);
     byId("dashboardDex").addEventListener("click", openPokedex);
     document.querySelectorAll("[data-help-category]").forEach((button) => button.addEventListener("click", () => openHelp((button.dataset.helpCategory ?? "all"))));
+    byId("helpSearch").addEventListener("input", renderHelpCards);
     document.querySelectorAll("[data-action]").forEach((button) => {
         button.addEventListener("click", () => {
             const action = button.dataset.action;
@@ -4139,6 +4334,7 @@ function bindEvents() {
         button.addEventListener("click", () => answerOx(button.dataset.ox === "true"));
     });
     byId("symmetryCheck").addEventListener("click", checkSymmetry);
+    byId("symmetryHint").addEventListener("click", useSymmetryHint);
     document.querySelectorAll("[data-move]").forEach((button) => button.addEventListener("click", () => moveCoordinate(button.dataset.move ?? "")));
     document.querySelectorAll("[data-snack-move]").forEach((button) => button.addEventListener("click", () => moveSnack(button.dataset.snackMove === "left" ? -12 : 12)));
     byId("snackField").addEventListener("pointerdown", (event) => moveSnackTo(event.clientX));
