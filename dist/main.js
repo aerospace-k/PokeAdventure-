@@ -19,7 +19,14 @@ const POKEMON = [
     { id: 280, name: "랄토스" }, { id: 607, name: "불켜미" }, { id: 679, name: "단칼빙" },
     { id: 744, name: "암멍이" }, { id: 255, name: "아차모" }, { id: 252, name: "나무지기" },
     { id: 258, name: "물짱이" }, { id: 446, name: "먹고자" }, { id: 417, name: "파치리스" },
-    { id: 399, name: "비버니" }, { id: 175, name: "토게피" }, { id: 251, name: "세레비" }
+    { id: 399, name: "비버니" }, { id: 175, name: "토게피" }, { id: 251, name: "세레비" },
+    { id: 58, name: "가디" }, { id: 35, name: "삐삐" }, { id: 95, name: "롱스톤" },
+    { id: 142, name: "프테라" }, { id: 113, name: "럭키" }, { id: 115, name: "캥카" },
+    { id: 125, name: "에레브" }, { id: 126, name: "마그마" }, { id: 50, name: "디그다" },
+    { id: 128, name: "켄타로" }, { id: 66, name: "알통몬" }, { id: 74, name: "꼬마돌" },
+    { id: 120, name: "별가사리" }, { id: 116, name: "쏘드라" }, { id: 111, name: "뿔카노" },
+    { id: 100, name: "찌리리공" }, { id: 138, name: "암나이트" }, { id: 140, name: "투구" },
+    { id: 43, name: "뚜벅쵸" }, { id: 60, name: "발챙이" }
 ];
 const MODE_MASCOTS = {
     quiz: 25, rain: 131, mole: 50, memory: 132, ox: 54, balloon: 39, space: 137, mine: 100, knowledge: 151,
@@ -121,8 +128,23 @@ const STORAGE = {
     name: "amsan_name_v2",
     avatar: "amsan_avatar_v2",
     records: "amsan_records_v2",
-    last: "amsan_last_v2"
+    last: "amsan_last_v2",
+    lifetimeStars: "amsan_lifetime_stars_v1"
 };
+const TRAINER_LEVELS = [
+    { level: 1, minStars: 0, title: "새싹 트레이너", reward: "기본 트레이너 카드", dexBonus: 0, tier: "starter" },
+    { level: 2, minStars: 5, title: "포켓볼 트레이너", reward: "도감 보너스 +1", dexBonus: 1, tier: "starter" },
+    { level: 3, minStars: 12, title: "호기심 탐험가", reward: "새싹 탐험 배지", dexBonus: 1, tier: "starter" },
+    { level: 4, minStars: 21, title: "슈퍼볼 트레이너", reward: "슈퍼볼 카드 테마", dexBonus: 2, tier: "great" },
+    { level: 5, minStars: 32, title: "지식 수집가", reward: "도감 보너스 +2", dexBonus: 4, tier: "great" },
+    { level: 6, minStars: 45, title: "공간 탐험가", reward: "지식 탐험 배지", dexBonus: 4, tier: "great" },
+    { level: 7, minStars: 60, title: "하이퍼볼 트레이너", reward: "하이퍼볼 카드 테마", dexBonus: 6, tier: "ultra" },
+    { level: 8, minStars: 78, title: "별빛 연구원", reward: "도감 보너스 +3", dexBonus: 9, tier: "ultra" },
+    { level: 9, minStars: 99, title: "챔피언 후보", reward: "별빛 탐험 배지", dexBonus: 9, tier: "ultra" },
+    { level: 10, minStars: 123, title: "마스터볼 트레이너", reward: "마스터볼 카드 테마", dexBonus: 12, tier: "master" },
+    { level: 11, minStars: 150, title: "배움 챔피언", reward: "도감 보너스 +4", dexBonus: 16, tier: "master" },
+    { level: 12, minStars: 180, title: "배움 마스터", reward: "배움 마스터 배지", dexBonus: 20, tier: "master" }
+];
 function byId(id) {
     const element = document.getElementById(id);
     if (!element)
@@ -292,9 +314,28 @@ function readRecords() {
     }
 }
 function saveRecord(entry) {
+    const lifetimeStars = getLifetimeStars() + Math.max(0, Math.min(3, Math.floor(entry.stars)));
+    safeSet(STORAGE.lifetimeStars, String(lifetimeStars));
     const records = [entry, ...readRecords()].slice(0, 60);
     safeSet(STORAGE.records, JSON.stringify(records));
     updateSideInfo();
+}
+function getLifetimeStars() {
+    const recordStars = readRecords().reduce((sum, record) => sum + Math.max(0, Math.min(3, Math.floor(record.stars))), 0);
+    const stored = Number(safeGet(STORAGE.lifetimeStars));
+    const stars = Number.isFinite(stored) && stored >= 0 ? Math.max(Math.floor(stored), recordStars) : recordStars;
+    if (String(stars) !== safeGet(STORAGE.lifetimeStars))
+        safeSet(STORAGE.lifetimeStars, String(stars));
+    return stars;
+}
+function getTrainerProgress(stars = getLifetimeStars()) {
+    let current = TRAINER_LEVELS[0];
+    TRAINER_LEVELS.forEach((level) => { if (stars >= level.minStars)
+        current = level; });
+    const next = TRAINER_LEVELS.find((level) => level.level === current.level + 1) ?? null;
+    const span = next ? next.minStars - current.minStars : 1;
+    const percent = next ? Math.max(0, Math.min(100, (stars - current.minStars) / span * 100)) : 100;
+    return { stars, current, next, percent, remaining: next ? Math.max(0, next.minStars - stars) : 0 };
 }
 function saveLastPlay() {
     if (state.grade === null || state.mode === null)
@@ -338,22 +379,80 @@ function ensureAudio() {
         return null;
     }
 }
-function tone(frequency, duration = 0.1, volume = 0.07) {
-    if (!sfxEnabled)
+function softNote(frequency, duration = 0.12, volume = 0.018, delay = 0, type = "sine", bypassSfx = false, endFrequency = frequency) {
+    if (!bypassSfx && !sfxEnabled)
         return;
     const context = ensureAudio();
     if (!context)
         return;
+    const start = context.currentTime + delay;
+    const end = start + duration;
     const oscillator = context.createOscillator();
+    const filter = context.createBiquadFilter();
     const gain = context.createGain();
-    oscillator.frequency.value = frequency;
-    oscillator.type = "triangle";
-    gain.gain.setValueAtTime(volume, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.0008, context.currentTime + duration);
-    oscillator.connect(gain);
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, start);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(30, endFrequency), end);
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(Math.min(2200, Math.max(700, frequency * 2.8)), start);
+    filter.Q.value = 0.45;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + Math.min(0.018, duration * 0.22));
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+    oscillator.connect(filter);
+    filter.connect(gain);
     gain.connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + duration);
+    oscillator.start(start);
+    oscillator.stop(end + 0.02);
+}
+function playNotes(notes, bypassSfx = false) {
+    notes.forEach(([frequency, duration, delay, volume, type = "sine"]) => {
+        softNote(frequency, duration, volume, delay, type, bypassSfx);
+    });
+}
+function tapSound() {
+    playNotes([[392, 0.07, 0, 0.009], [523, 0.075, 0.025, 0.005]]);
+}
+function selectSound() {
+    playNotes([[392, 0.12, 0, 0.015], [587, 0.15, 0.055, 0.014]]);
+}
+function collectSound(gold = false) {
+    playNotes(gold
+        ? [[523, 0.13, 0, 0.016], [659, 0.15, 0.05, 0.015], [880, 0.2, 0.11, 0.014]]
+        : [[440, 0.12, 0, 0.013], [659, 0.16, 0.055, 0.013]]);
+}
+function bumpSound() {
+    softNote(165, 0.14, 0.012, 0, "sine", false, 118);
+}
+function moveSound() {
+    softNote(330, 0.06, 0.007);
+}
+function openSound() {
+    playNotes([[349, 0.075, 0, 0.009], [440, 0.085, 0.025, 0.007]]);
+}
+function flagSound(active) {
+    playNotes(active
+        ? [[440, 0.1, 0, 0.012], [659, 0.13, 0.045, 0.011]]
+        : [[523, 0.1, 0, 0.011], [392, 0.13, 0.045, 0.01]]);
+}
+function modeSound(active) {
+    playNotes(active
+        ? [[392, 0.1, 0, 0.012], [587, 0.14, 0.05, 0.011]]
+        : [[587, 0.1, 0, 0.011], [392, 0.14, 0.05, 0.01]]);
+}
+function levelUpSound() {
+    playNotes([
+        [392, 0.2, 0, 0.018],
+        [523, 0.22, 0.08, 0.018],
+        [659, 0.25, 0.17, 0.017],
+        [784, 0.32, 0.27, 0.015],
+    ]);
+}
+function musicNote(frequency) {
+    playNotes([
+        [frequency, 0.48, 0, 0.0075],
+        [frequency * 2, 0.3, 0.035, 0.0022],
+    ], true);
 }
 function playPokemonCry(id, volume = .16) {
     if (!sfxEnabled)
@@ -370,18 +469,20 @@ function playPokemonCry(id, volume = .16) {
     catch { /* 네트워크 또는 자동 재생 차단 시 합성 효과음만 사용 */ }
 }
 function correctSound() {
-    tone(523, .08, .075);
-    window.setTimeout(() => tone(659, .1, .08), 65);
-    window.setTimeout(() => tone(784, .14, .075), 135);
-    window.setTimeout(() => tone(1047, .18, .06), 220);
+    playNotes([
+        [523, 0.17, 0, 0.02],
+        [659, 0.19, 0.065, 0.019],
+        [784, 0.23, 0.14, 0.017],
+    ]);
     if (Math.random() < .24)
-        window.setTimeout(() => playPokemonCry(getAvatarId(), .11), 280);
+        window.setTimeout(() => playPokemonCry(getAvatarId(), .08), 260);
     pokemonSparkBurst(8);
 }
 function wrongSound() {
-    tone(330, .09, .07);
-    window.setTimeout(() => tone(247, .13, .075), 75);
-    window.setTimeout(() => tone(196, .18, .06), 150);
+    playNotes([
+        [294, 0.16, 0, 0.016],
+        [220, 0.21, 0.085, 0.014],
+    ]);
 }
 function startMusic() {
     if (!musicEnabled || musicTimer !== null)
@@ -390,13 +491,10 @@ function startMusic() {
     const notes = [262, 330, 392, 330, 349, 440, 392, 330];
     musicTimer = window.setInterval(() => {
         if (musicEnabled) {
-            const old = sfxEnabled;
-            sfxEnabled = true;
-            tone(notes[index % notes.length], .18, .025);
-            sfxEnabled = old;
+            musicNote(notes[index % notes.length]);
             index += 1;
         }
-    }, 560);
+    }, 720);
 }
 function stopMusic() {
     if (musicTimer !== null)
@@ -423,36 +521,48 @@ function setActiveNav(name) {
     more.open = false;
     more.classList.toggle("has-active", secondary.has(name));
 }
+function closeMoreMenu(restoreFocus = false) {
+    const more = byId("sideMoreMenu");
+    if (!more.open)
+        return;
+    more.open = false;
+    if (restoreFocus)
+        more.querySelector("summary")?.focus();
+}
 function gradeName(grade) {
     return GRADES[grade]?.name ?? "유치원";
 }
 function updateSideInfo() {
     const records = readRecords();
-    const stars = records.reduce((sum, record) => sum + record.stars, 0);
-    const level = Math.floor(stars / 5) + 1;
-    const progress = (stars % 5) * 20;
+    const progress = getTrainerProgress();
+    const stars = progress.stars;
+    document.body.dataset.trainerTier = progress.current.tier;
     byId("sideName").textContent = getName() || "친구";
     byId("sideStars").textContent = "별 " + stars + "개";
     replaceWithPokemon(byId("sideMascot"), getAvatarId());
     const card = byId("levelCard");
     card.replaceChildren();
     const title = document.createElement("strong");
-    title.textContent = "Lv." + level + " 계산 모험가";
+    title.textContent = "Lv." + progress.current.level + " " + progress.current.title;
     const track = document.createElement("div");
     track.className = "level-track";
     const fill = document.createElement("div");
     fill.className = "level-fill";
-    fill.style.width = progress + "%";
+    fill.style.width = progress.percent + "%";
     track.append(fill);
     const note = document.createElement("small");
-    note.textContent = "다음 레벨까지 별 " + (5 - stars % 5) + "개";
-    card.append(title, track, note);
-    byId("cheerCard").textContent = records.length ? "오늘도 차분하게 한 문제씩 풀어봐요." : "첫 게임을 시작해 볼까요?";
+    note.textContent = progress.next ? "다음 레벨까지 별 " + progress.remaining + "개" : "최고 레벨을 달성했어요!";
+    const reward = document.createElement("small");
+    reward.className = "level-card-reward";
+    reward.textContent = "획득: " + progress.current.reward;
+    card.append(title, track, note, reward);
+    byId("cheerCard").textContent = progress.next ? "다음 보상: " + progress.next.reward : "배움 마스터의 모험을 이어가요!";
 }
 function buildGradeHero() {
     const records = readRecords();
     const best = records.reduce((value, record) => Math.max(value, record.score), 0);
-    const stars = records.reduce((value, record) => value + record.stars, 0);
+    const progress = getTrainerProgress();
+    const stars = progress.stars;
     const hero = byId("gradeHero");
     hero.replaceChildren();
     hero.append(pokemonMedia(pokemonById(getAvatarId())));
@@ -461,7 +571,7 @@ function buildGradeHero() {
     const heading = document.createElement("h2");
     heading.textContent = (getName() || "친구") + "님, 오늘도 반가워요!";
     const paragraph = document.createElement("p");
-    paragraph.textContent = "학년을 고르고 계산 모험을 시작해요.";
+    paragraph.textContent = "Lv." + progress.current.level + " " + progress.current.title + " · 학년을 고르고 배움 모험을 시작해요.";
     copy.append(heading, paragraph);
     hero.append(copy, heroStat(String(records.length), "플레이"), heroStat(String(best), "최고 점수"), heroStat(String(stars), "별"));
 }
@@ -497,12 +607,52 @@ function cardButton(title, description, colors, action, pokemonId) {
     });
     return button;
 }
+function renderLevelJourney(progress) {
+    const host = byId("dashboardLevelJourney");
+    host.replaceChildren();
+    const head = document.createElement("div");
+    head.className = "level-journey-head";
+    const badge = document.createElement("strong");
+    badge.className = "level-journey-badge";
+    badge.textContent = "Lv." + progress.current.level;
+    const copy = document.createElement("div");
+    const title = document.createElement("h3");
+    title.textContent = progress.current.title;
+    const count = document.createElement("span");
+    count.textContent = progress.next ? "별 " + progress.stars + " / " + progress.next.minStars : "별 " + progress.stars + " · 최고 레벨";
+    copy.append(title, count);
+    head.append(badge, copy);
+    const track = document.createElement("div");
+    track.className = "level-journey-track";
+    const fill = document.createElement("i");
+    fill.style.width = progress.percent + "%";
+    track.append(fill);
+    const rewards = document.createElement("div");
+    rewards.className = "level-journey-rewards";
+    const currentReward = document.createElement("div");
+    currentReward.className = "level-reward-card earned";
+    const currentLabel = document.createElement("small");
+    currentLabel.textContent = "현재 보상";
+    const currentText = document.createElement("b");
+    currentText.textContent = progress.current.reward;
+    currentReward.append(currentLabel, currentText);
+    const nextReward = document.createElement("div");
+    nextReward.className = "level-reward-card next";
+    const nextLabel = document.createElement("small");
+    nextLabel.textContent = progress.next ? "다음 보상 · 별 " + progress.remaining + "개 남음" : "모든 보상 획득";
+    const nextText = document.createElement("b");
+    nextText.textContent = progress.next?.reward ?? "배움 마스터 배지";
+    nextReward.append(nextLabel, nextText);
+    rewards.append(currentReward, nextReward);
+    host.append(head, track, rewards);
+}
 function openDashboard() {
     cleanupGame();
     setActiveNav("dashboard");
     const records = readRecords();
-    const stars = records.reduce((sum, record) => sum + record.stars, 0);
-    const level = Math.floor(stars / 5) + 1;
+    const progress = getTrainerProgress();
+    const stars = progress.stars;
+    const level = progress.current.level;
     const todayRecords = records.filter((record) => record.timestamp >= startOfToday());
     const missions = dailyModes();
     const done = missions.filter((mode) => todayRecords.some((record) => record.mode === mode)).length;
@@ -518,6 +668,7 @@ function openDashboard() {
     daily.classList.toggle("complete", done === 3);
     const stats = byId("dashboardStats");
     stats.replaceChildren(reportMetric("Lv." + level, "트레이너 레벨"), reportMetric(String(stars), "모은 별"), reportMetric(String(records.length), "완료 게임"), reportMetric(discoveredPokemonCount() + "/" + POKEMON.length, "발견 도감"));
+    renderLevelJourney(progress);
     const recent = byId("dashboardRecent");
     recent.replaceChildren();
     if (!records.length) {
@@ -643,8 +794,8 @@ function pokemonAvatarMedia(pokemon) {
     return media;
 }
 function discoveredPokemonCount() {
-    const stars = readRecords().reduce((sum, record) => sum + record.stars, 0);
-    return Math.min(POKEMON.length, 5 + stars);
+    const progress = getTrainerProgress();
+    return Math.min(POKEMON.length, 5 + progress.stars + progress.current.dexBonus);
 }
 function openPokedex() {
     cleanupGame();
@@ -684,6 +835,9 @@ async function loadPokedexDetail(pokemon, selected) {
     selected.classList.add("selected");
     const detail = byId("pokedexDetail");
     detail.replaceChildren();
+    if (window.matchMedia("(max-width: 700px)").matches) {
+        window.requestAnimationFrame(() => detail.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
     const loading = document.createElement("p");
     loading.textContent = pokemon.name + "의 도감 정보를 불러오는 중...";
     detail.append(loading);
@@ -748,7 +902,7 @@ function openReport() {
     setActiveNav("report");
     const records = readRecords();
     const recent = records.filter((record) => record.timestamp >= Date.now() - 7 * 86400000);
-    const stars = records.reduce((sum, record) => sum + record.stars, 0);
+    const stars = getLifetimeStars();
     const summary = byId("reportSummary");
     summary.replaceChildren(reportMetric(String(records.length), "전체 플레이"), reportMetric(String(recent.length), "최근 7일"), reportMetric(String(stars), "모은 별"), reportMetric(String(discoveredPokemonCount()), "발견 포켓몬"));
     const categories = ["암산·수 연산", "도형·공간", "지식탐험", "미니게임"];
@@ -1043,7 +1197,7 @@ function nextQuizQuestion() {
                 return;
             quiz.input += value;
             byId("quizAnswer").textContent = quiz.input;
-            tone(720, .04, .04);
+            tapSound();
         }, () => {
             if (!quiz || quiz.locked)
                 return;
@@ -1127,7 +1281,8 @@ function startRain() {
         lastFrame: performance.now(), lastSpawn: performance.now() - config.gap, raf: 0, wave: 1
     };
     byId("rainField").querySelectorAll(".rain-drop").forEach((drop) => drop.remove());
-    byId("rainKeypad").replaceChildren(keypad(rainNumber, rainDelete, rainSubmit));
+    const rainPad = keypad(rainNumber, rainDelete, rainSubmit);
+    byId("rainKeypad").replaceChildren(...Array.from(rainPad.childNodes));
     renderRainHud();
     showScreen("rain");
     rain.raf = requestAnimationFrame(rainFrame);
@@ -2154,7 +2309,7 @@ function catchSnackItem(item, index) {
     if (item.kind === "rock") {
         snack.score = Math.max(0, snack.score - 120);
         snack.combo = 0;
-        tone(150, .09, .018);
+        bumpSound();
         showToast("바위는 피해요!");
     }
     else {
@@ -2162,7 +2317,7 @@ function catchSnackItem(item, index) {
         snack.best = Math.max(snack.best, snack.combo);
         snack.caught += 1;
         snack.score += (item.kind === "gold" ? 300 : 100) + snack.combo * 5;
-        tone(item.kind === "gold" ? 880 : 620, .06, .014);
+        collectSound(item.kind === "gold");
         if (item.kind === "gold")
             pokemonSparkBurst(7);
     }
@@ -2372,7 +2527,7 @@ function moveCoordinate(direction) {
     coordinate.x = nx;
     coordinate.y = ny;
     coordinate.moves += 1;
-    tone(440, .04, .012);
+    moveSound();
     if (nx === coordinate.goalX && ny === coordinate.goalY) {
         coordinate.score += Math.max(80, 260 - coordinate.moves * 4);
         coordinate.stage += 1;
@@ -2845,7 +3000,7 @@ function openMineCell(index) {
         return;
     }
     floodOpenMine(index);
-    tone(540, .035, .035);
+    openSound();
     renderMineHud();
     checkMineStageClear();
 }
@@ -2890,7 +3045,7 @@ function toggleMineFlag(index) {
     mine.flags += cell.flagged ? 1 : -1;
     cell.element.classList.toggle("flagged", cell.flagged);
     cell.element.setAttribute("aria-label", cell.flagged ? "몬스터볼로 표시한 칸" : "열지 않은 칸");
-    tone(cell.flagged ? 780 : 420, .05, .045);
+    flagSound(cell.flagged);
     renderMineHud();
 }
 function appendVoltorb(target) {
@@ -2958,14 +3113,14 @@ function resetMineStage() {
         window.clearTimeout(mine.nextTimer);
     mine.nextTimer = null;
     setupMineStage(mine.stage);
-    tone(660, .08, .05);
+    selectSound();
 }
 function toggleMineMode() {
     if (!mine?.running)
         return;
     mine.markMode = !mine.markMode;
     renderMineHud();
-    tone(mine.markMode ? 820 : 520, .06, .04);
+    modeSound(mine.markMode);
 }
 function finishMine(won) {
     if (!mine?.running || state.grade === null)
@@ -2997,23 +3152,31 @@ function cleanupGame() {
     knowledge = null;
 }
 function showResult(stars, title, speech, stats) {
+    const progress = getTrainerProgress();
+    const previous = getTrainerProgress(Math.max(0, progress.stars - stars));
+    const leveledUp = progress.current.level > previous.current.level;
     replaceWithPokemon(byId("resultMascot"), getAvatarId());
     byId("resultStars").textContent = "★".repeat(stars) + "☆".repeat(3 - stars);
     byId("resultTitle").textContent = title;
-    byId("resultSpeech").textContent = speech;
+    byId("resultSpeech").textContent = leveledUp ? speech + " 트레이너 레벨이 올랐어요!" : speech;
+    const reward = byId("resultReward");
+    reward.classList.toggle("hidden-panel", !leveledUp);
+    reward.textContent = leveledUp ? "LEVEL UP · Lv." + progress.current.level + " " + progress.current.title + " · " + progress.current.reward + " 획득" : "";
     const container = byId("resultStats");
     container.replaceChildren();
     stats.forEach(([value, label]) => container.append(heroStat(value, label)));
     showScreen("result");
     window.setTimeout(() => playPokemonCry(getAvatarId(), .18), 220);
-    pokemonSparkBurst(stars >= 2 ? 30 : 14);
+    pokemonSparkBurst(leveledUp ? 48 : stars >= 2 ? 30 : 14);
+    if (leveledUp)
+        levelUpSound();
 }
 function openRecords() {
     cleanupGame();
     setActiveNav("records");
     const records = readRecords();
     const best = records.reduce((value, record) => Math.max(value, record.score), 0);
-    const stars = records.reduce((value, record) => value + record.stars, 0);
+    const stars = getLifetimeStars();
     const summary = byId("recordSummary");
     summary.replaceChildren(heroStat(String(records.length), "플레이"), heroStat(String(best), "최고 점수"), heroStat(String(stars), "별"));
     const wrapper = byId("recordTable");
@@ -3176,7 +3339,7 @@ function showAvatarPicker(changing) {
         button.append(label);
         button.addEventListener("click", () => {
             setAvatarId(pokemon.id);
-            tone(880, .08, .07);
+            selectSound();
             playPokemonCry(pokemon.id, .18);
             if (avatarChanging)
                 closeAvatarPicker();
@@ -3315,6 +3478,12 @@ function bindEvents() {
         showAvatarPicker(true);
     });
     byId("closeAvatar").addEventListener("click", closeAvatarPicker);
+    byId("closeMoreMenu").addEventListener("click", () => closeMoreMenu(true));
+    byId("moreMenuBackdrop").addEventListener("click", () => closeMoreMenu(true));
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && byId("sideMoreMenu").open)
+            closeMoreMenu(true);
+    });
     byId("changeNameButton").addEventListener("click", () => {
         cleanupGame();
         byId("app").classList.add("hidden-panel");
@@ -3393,6 +3562,7 @@ function bindEvents() {
     byId("clearRecords").addEventListener("click", () => {
         if (window.confirm("모든 기록을 지울까요?")) {
             safeRemove(STORAGE.records);
+            safeRemove(STORAGE.lifetimeStars);
             updateSideInfo();
             openRecords();
         }
