@@ -7,6 +7,9 @@ let lifecycleHiddenAt = document.hidden ? performance.now() : null;
 let lifecycleAnimationOffset = 0;
 let lifecycleFrameSequence = 0;
 const lifecycleFrames = new Map();
+function lifecycleNow() {
+    return performance.now() - lifecycleAnimationOffset;
+}
 window.setInterval = ((handler, timeout, ...args) => nativeSetInterval(() => {
     if (!document.hidden && typeof handler === "function")
         handler(...args);
@@ -1611,10 +1614,11 @@ function stopRain() {
 }
 function startRain() {
     const config = RAIN_CONFIG[state.diff];
+    const started = lifecycleNow();
     rain = {
         running: true, finished: false, hp: 5, score: 0, popped: 0, input: "", drops: [],
-        speed: config.speed, gap: config.gap, maxDrops: config.max, started: performance.now(),
-        lastFrame: performance.now(), lastSpawn: performance.now(), raf: 0, watchdog: 0, wave: 1, trapsAvoided: 0
+        speed: config.speed, gap: config.gap, maxDrops: config.max, started,
+        lastFrame: started, lastSpawn: started, raf: 0, watchdog: 0, wave: 1, trapsAvoided: 0
     };
     byId("rainField").querySelectorAll(".rain-drop").forEach((drop) => drop.remove());
     setupRainAmbientPokemon();
@@ -1630,21 +1634,22 @@ function startRain() {
             return;
         const field = byId("rainField");
         if (field.clientWidth < 240 || field.clientHeight < 160) {
-            session.lastFrame = performance.now();
+            session.lastFrame = lifecycleNow();
             session.raf = requestAnimationFrame(launchRain);
             return;
         }
         if (session.drops.length === 0)
             spawnRainDrop();
-        session.lastSpawn = performance.now();
-        session.lastFrame = performance.now();
+        const launchedAt = lifecycleNow();
+        session.lastSpawn = launchedAt;
+        session.lastFrame = launchedAt;
         session.raf = requestAnimationFrame(rainFrame);
     };
     rain.raf = requestAnimationFrame(launchRain);
     rain.watchdog = window.setInterval(() => {
         if (!rain?.running || document.hidden)
             return;
-        const now = performance.now();
+        const now = lifecycleNow();
         const field = byId("rainField");
         if (field.clientWidth < 240 || field.clientHeight < 160) {
             rain.lastFrame = now;
@@ -1724,11 +1729,12 @@ function spawnRainDrop() {
     const field = byId("rainField");
     if (field.clientWidth < 240 || field.clientHeight < 160)
         return;
-    let problem = newProblem(difficultyForElapsed(rain.started, MAX_GAME_SECONDS));
-    const elapsed = (performance.now() - rain.started) / 1000;
+    const elapsed = Math.max(0, (lifecycleNow() - rain.started) / 1000);
+    const phase = difficultyForProgress(Math.min(1, elapsed / MAX_GAME_SECONDS));
+    let problem = newProblem(phase);
     const trap = elapsed >= 18 && !rain.drops.some((item) => item.trap) && Math.random() < Math.min(.22, .1 + elapsed * .0007);
     for (let attempt = 0; trap && attempt < 4 && rain.drops.some((item) => item.answer === problem.answer); attempt += 1)
-        problem = newProblem(difficultyForElapsed(rain.started, MAX_GAME_SECONDS));
+        problem = newProblem(phase);
     const heal = !trap && rain.hp < 5 && Math.random() < .14;
     const drop = document.createElement("div");
     drop.className = "rain-drop" + (heal ? " heal" : "") + (trap ? " trap" : "");
@@ -1836,7 +1842,7 @@ function finishRain() {
     if (rain.raf)
         cancelAnimationFrame(rain.raf);
     const game = rain;
-    const seconds = Math.floor((performance.now() - game.started) / 1000);
+    const seconds = Math.floor((lifecycleNow() - game.started) / 1000);
     const stars = game.popped >= 18 ? 3 : game.popped >= 10 ? 2 : game.popped >= 4 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "rain", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.popped + "개 · " + seconds + "초", timestamp: Date.now() });
     showRainFinishScene(game.popped);
@@ -2421,12 +2427,18 @@ function stopBalloon() {
         window.clearInterval(balloon.countdown);
 }
 function startBalloon() {
-    balloon = { running: true, score: 0, combo: 0, best: 0, popped: 0, time: 60, target: newProblem("easy"), items: [], started: performance.now(), lastFrame: performance.now(), lastSpawn: performance.now() - 2000, raf: 0, countdown: null };
+    const started = lifecycleNow();
+    balloon = { running: true, score: 0, combo: 0, best: 0, popped: 0, time: 60, target: newProblem("easy"), items: [], started, lastFrame: started, lastSpawn: started, raf: 0, countdown: null };
     byId("balloonField").replaceChildren();
     byId("balloonFever").textContent = "0 / 8";
     byId("balloonField").classList.remove("fever");
     renderBalloonHud();
     showScreen("balloon");
+    const visibleAt = lifecycleNow();
+    balloon.started = visibleAt;
+    balloon.lastFrame = visibleAt;
+    balloon.lastSpawn = visibleAt;
+    spawnBalloon();
     showThemedGameScene("balloon", "푸린 하늘 콘서트", "정답 풍선만 찾아 멋진 노래를 완성해요!", 850);
     balloon.countdown = window.setInterval(() => {
         if (!balloon?.running)
@@ -2487,9 +2499,12 @@ function spawnBalloon() {
     element.setAttribute("aria-label", balloonPokemon.name + "의 숫자 풍선 " + value + (bonus ? ", 보너스 500점" : ""));
     element.append(artwork, number);
     const sideMargin = bonus ? 82 : 70;
-    element.style.left = randomInt(sideMargin, Math.max(sideMargin + 1, field.clientWidth - sideMargin)) + "px";
-    element.style.top = field.clientHeight + "px";
-    const item = { element, value, y: field.clientHeight, bonus };
+    const fieldWidth = Math.max(field.clientWidth, 320);
+    const fieldHeight = Math.max(field.clientHeight, 240);
+    const startY = fieldHeight - Math.min(96, fieldHeight * .12);
+    element.style.left = randomInt(sideMargin, Math.max(sideMargin + 1, fieldWidth - sideMargin)) + "px";
+    element.style.top = startY + "px";
+    const item = { element, value, y: startY, bonus };
     element.addEventListener("click", () => popBalloon(item));
     field.append(element);
     balloon.items.push(item);
@@ -2521,7 +2536,8 @@ function popBalloon(item) {
             playPokemonCry(40, .16);
         balloon.best = Math.max(balloon.best, balloon.combo);
         balloon.popped += 1;
-        balloon.target = newProblem(difficultyForElapsed(balloon.started, 60));
+        const elapsed = Math.max(0, (lifecycleNow() - balloon.started) / 1000);
+        balloon.target = newProblem(difficultyForProgress(Math.min(1, elapsed / 60)));
         correctSound();
     }
     else {
