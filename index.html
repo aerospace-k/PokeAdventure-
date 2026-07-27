@@ -93,7 +93,7 @@
         <details id="sideMoreMenu" class="side-more">
           <summary>더보기</summary>
           <button id="moreMenuBackdrop" class="side-more-backdrop" type="button" aria-label="더보기 메뉴 닫기"></button>
-          <div class="side-more-panel">
+          <div class="side-more-panel" inert aria-hidden="true">
             <div class="side-more-head"><strong>추가 메뉴</strong><button id="closeMoreMenu" type="button" aria-label="더보기 메뉴 닫기">닫기 ×</button></div>
             <button class="nav-button" data-nav="report" type="button">학습 리포트</button>
             <button class="nav-button" data-nav="records" type="button">나의 기록</button>
@@ -232,7 +232,7 @@
           <div id="rainField" class="playfield"><div id="rainSceneIntro" class="rain-scene-intro" aria-hidden="true"><div class="rain-scene-copy"><span>MAGIKARP RAIN RESCUE</span><strong>잉어킹 산성비 챌린지</strong><small>비 내리는 도시를 수식으로 지켜 주세요!</small></div></div><div class="ground"></div></div>
           <aside class="rain-controls">
             <div id="rainTrainer" class="trainer-cameo"></div>
-            <p>문제가 땅에 닿기 전에 답을 입력해요.</p>
+            <p>일반 문제만 풀고, 보라색 로켓단 함정은 건드리지 마세요.</p>
             <div id="rainInput" class="answer-display">?</div>
             <div id="rainKeypad" class="keypad"></div>
           </aside>
@@ -257,7 +257,7 @@
           <span>뒤집기 <b id="memoryMoves">0</b>번</span>
           <span>완성 <b id="memoryMatched">0</b>/<b id="memoryTotal">0</b></span>
           <span>연속 <b id="memoryCombo">0</b></span>
-          <span class="memory-lives">기회 <b id="memoryLives">❤️❤️❤️</b></span>
+          <span class="memory-lives">기억 에너지 <b id="memoryLives">⚡⚡⚡</b></span>
           <span>남은 시간 <b id="memoryTime">10:00</b></span>
           <button class="quit-button" data-quit="memory" type="button">그만하기</button>
         </div>
@@ -339,7 +339,7 @@
         <div class="lab-layout">
           <article class="lab-guide symmetry-guide">
             <span class="symmetry-lab-label">PACHIRISU ELECTRIC LAB</span>
-            <div id="symmetryMascot" class="lab-pokemon"></div><h2>파치리스의 대칭 연구소</h2><p>왼쪽 전기 무늬와 똑같이 오른쪽 회로를 연결해 주세요.</p>
+            <div id="symmetryMascot" class="lab-pokemon"></div><h2>파치리스 대칭 연구소</h2><p>왼쪽 전기 무늬와 똑같이 오른쪽 회로를 연결해 주세요.</p>
             <div class="symmetry-charge"><span>대칭 에너지</span><div><i id="symmetryChargeBar"></i></div><b id="symmetryChargeText">0 / 5</b></div>
           </article>
           <div class="lab-workbench symmetry-workbench"><p id="symmetryStatus" class="symmetry-status" aria-live="polite">대칭축에서 같은 거리의 칸을 찾아요.</p><div id="symmetryGrid" class="symmetry-grid"></div><div class="symmetry-actions"><button id="symmetryHint" class="ghost-button symmetry-hint" type="button">전기 힌트 <small>-50점</small></button><button id="symmetryCheck" class="primary-button" type="button">회로 확인</button></div></div>
@@ -349,10 +349,10 @@
       <section id="screen-coordinate" class="screen game-screen">
         <div class="hud">
           <span>점수 <b id="coordinateScore">0</b></span><span>지도 <b id="coordinateStage">1/5</b></span>
-          <span>이동 <b id="coordinateMoves">0</b></span><button class="quit-button" data-quit="coordinate" type="button">그만하기</button>
+          <span>이동 에너지 <b id="coordinateMoves">0/0</b></span><button class="quit-button" data-quit="coordinate" type="button">그만하기</button>
         </div>
         <div class="coordinate-layout">
-          <article class="coordinate-guide"><div id="coordinateMascot" class="lab-pokemon"></div><h2>폴리곤 좌표 미로</h2><p id="coordinateMission"></p></article>
+          <article class="coordinate-guide"><div id="coordinateMascot" class="lab-pokemon"></div><h2>폴리곤 좌표 미로</h2><p id="coordinateMission"></p><div id="coordinateProgress" class="coordinate-progress">데이터 0/0</div></article>
           <div id="coordinateBoard" class="coordinate-board" aria-label="좌표 미로"></div>
           <div class="direction-pad" aria-label="이동 버튼"><button data-move="up" type="button">▲</button><button data-move="left" type="button">◀</button><button data-move="down" type="button">▼</button><button data-move="right" type="button">▶</button></div>
         </div>
@@ -372,7 +372,9 @@
             <div class="history-guide-rule"><b>탐험 규칙</b><span>연속 정답일수록 보너스 점수가 커져요.</span></div>
           </aside>
           <div class="history-workspace">
-            <div class="history-mission-head"><span>복원된 시간 물결</span><b id="historyMissionText">첫 사건을 찾아보세요</b></div>
+            <div class="history-energy" aria-live="polite">
+              <span>시간 에너지</span><div><i id="historyEnergyBar"></i></div><b id="historyEnergyText">0 / 8</b>
+            </div>            <div class="history-mission-head"><span>복원된 시간 물결</span><b id="historyMissionText">첫 사건을 찾아보세요</b></div>
             <div id="historyTimeline" class="history-timeline" aria-label="복원된 역사 시간선"></div>
             <div class="history-choice-head"><b>다음 사건은 무엇일까요?</b><span>가장 오래된 사건을 선택하세요.</span></div>
             <div id="historyCards" class="history-cards"></div>
@@ -406,7 +408,7 @@
         </div>
         <div class="snack-layout">
           <div id="snackField" class="snack-field" aria-label="잠만보 열매 캐치 게임"><div id="snackSceneIntro" class="snack-scene-intro" aria-hidden="true"><div class="snack-scene-copy"><span>BERRY HILL ADVENTURE</span><strong>잠만보 베리 대모험</strong><small>마을 언덕에서 맛있는 열매를 받아요!</small></div></div><div class="snack-clouds" aria-hidden="true"></div><div id="snackPlayer" class="snack-player"></div></div>
-          <aside class="snack-controls"><span class="snack-route">BERRY FOREST</span><h2>잠만보 베리 대모험</h2><p>나무열매를 모아 10콤보 피버를 만들고, 바위는 피해요!</p><div class="snack-fever"><span>피버 게이지</span><div><i id="snackFeverBar"></i></div><b id="snackFeverText">0/10</b></div><div class="snack-move-buttons"><button data-snack-move="left" type="button">◀ 왼쪽</button><button data-snack-move="right" type="button">오른쪽 ▶</button></div><div class="snack-legend"><span>나무열매 +100</span><span>이상한사탕 +300</span><span>회복약 체력 +1</span><span>딱딱한돌 조심!</span></div></aside>
+          <aside class="snack-controls"><span class="snack-route">BERRY FOREST</span><h2>잠만보 베리 대모험</h2><p>다양한 열매를 모아 10콤보 피버를 만들고, 바위는 피해요!</p><div class="snack-fever"><span>피버 게이지</span><div><i id="snackFeverBar"></i></div><b id="snackFeverText">0/10</b></div><div class="snack-move-buttons"><button data-snack-move="left" type="button">◀ 왼쪽</button><button data-snack-move="right" type="button">오른쪽 ▶</button></div><div class="snack-legend"><span>열매별 +80~300</span><span>이상한사탕 +400</span><span>회복약 체력 +1</span><span>딱딱한돌 조심!</span></div></aside>
         </div>
       </section>
 
@@ -452,7 +454,9 @@
               <span data-zone="생활">생활기지</span>
             </div>
             <div id="knowledgeProgress" class="knowledge-progress" aria-label="탐험 진행도"></div>
-          </aside>
+            <div id="knowledgeBadge" class="knowledge-badge" aria-live="polite">
+              <span>발견 배지</span><b>0 / 4</b><small>네 지역의 지식을 모두 발견해요.</small>
+            </div>          </aside>
           <article class="knowledge-card">
             <div class="knowledge-card-head">
               <span id="knowledgeCategory" class="knowledge-category"></span>
