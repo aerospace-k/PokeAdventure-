@@ -1750,13 +1750,27 @@ function spawnRainDrop() {
 function setupRainAmbientPokemon() {
     const field = byId("rainField");
     field.querySelectorAll(".rain-ambient-pokemon").forEach((item) => item.remove());
-    const bird = pokemonMedia({ id: 16, name: "구구" });
-    bird.classList.add("rain-ambient-pokemon", "rain-bird");
-    bird.setAttribute("aria-hidden", "true");
-    const magikarp = pokemonMedia({ id: 129, name: "잉어킹" });
-    magikarp.classList.add("rain-ambient-pokemon", "rain-magikarp");
-    magikarp.setAttribute("aria-hidden", "true");
-    field.append(bird, magikarp);
+    const extraFlyer = choose([
+        { id: 21, name: "깨비참" }, { id: 83, name: "파오리" }, { id: 41, name: "주뱃" },
+        { id: 149, name: "망나뇽" }, { id: 144, name: "프리져" }
+    ]);
+    const extraWater = choose([
+        { id: 60, name: "발챙이" }, { id: 54, name: "고라파덕" }, { id: 7, name: "꼬부기" },
+        { id: 116, name: "쏘드라" }, { id: 120, name: "별가사리" }
+    ]);
+    const ambientPokemon = [
+        { pokemon: { id: 17, name: "피죤" }, classes: ["rain-flyer", "rain-flyer-a"], delay: "-3.5s" },
+        { pokemon: extraFlyer, classes: ["rain-flyer", "rain-flyer-b"], delay: "-11s" },
+        { pokemon: { id: 129, name: "잉어킹" }, classes: ["rain-water", "rain-water-a"], delay: "-1.2s" },
+        { pokemon: extraWater, classes: ["rain-water", "rain-water-b"], delay: "-6.5s" }
+    ];
+    ambientPokemon.forEach(({ pokemon, classes, delay }) => {
+        const element = pokemonMedia(pokemon);
+        element.classList.add("rain-ambient-pokemon", ...classes);
+        element.setAttribute("aria-hidden", "true");
+        element.style.setProperty("--rain-ambient-delay", delay);
+        field.append(element);
+    });
 }
 function showRainDropEffect(drop, text, kind) {
     const effect = document.createElement("strong");
@@ -2428,9 +2442,10 @@ function stopBalloon() {
 }
 function startBalloon() {
     const started = lifecycleNow();
-    balloon = { running: true, score: 0, combo: 0, best: 0, popped: 0, time: 60, target: newProblem("easy"), items: [], started, lastFrame: started, lastSpawn: started, raf: 0, countdown: null };
+    balloon = { running: true, score: 0, combo: 0, best: 0, popped: 0, time: 60, target: newProblem("easy"), items: [], started, lastFrame: started, lastSpawn: started, raf: 0, countdown: null, mistakes: 0, inputLocked: false };
     byId("balloonField").replaceChildren();
     byId("balloonFever").textContent = "0 / 8";
+    byId("balloonMistakes").textContent = "0 / 3";
     byId("balloonField").classList.remove("fever");
     renderBalloonHud();
     showScreen("balloon");
@@ -2438,7 +2453,7 @@ function startBalloon() {
     balloon.started = visibleAt;
     balloon.lastFrame = visibleAt;
     balloon.lastSpawn = visibleAt;
-    spawnBalloon();
+    launchBalloonWave();
     showThemedGameScene("balloon", "푸린 하늘 콘서트", "정답 풍선만 찾아 멋진 노래를 완성해요!", 850);
     balloon.countdown = window.setInterval(() => {
         if (!balloon?.running)
@@ -2478,11 +2493,11 @@ function balloonFrame(now) {
     byId("balloonSpeed").textContent = multiplier.toFixed(1);
     balloon.raf = requestAnimationFrame(balloonFrame);
 }
-function spawnBalloon() {
+function spawnBalloon(forceCorrect, laneIndex) {
     if (!balloon)
         return;
     const field = byId("balloonField");
-    const correct = Math.random() < .42;
+    const correct = forceCorrect ?? Math.random() < .42;
     const wrong = choicesFor(balloon.target.answer).filter((value) => value !== balloon?.target.answer);
     const value = correct ? balloon.target.answer : choose(wrong);
     const bonus = correct && Math.random() < .09;
@@ -2502,15 +2517,33 @@ function spawnBalloon() {
     const fieldWidth = Math.max(field.clientWidth, 320);
     const fieldHeight = Math.max(field.clientHeight, 240);
     const startY = fieldHeight - Math.min(96, fieldHeight * .12);
-    element.style.left = randomInt(sideMargin, Math.max(sideMargin + 1, fieldWidth - sideMargin)) + "px";
+    const lanePositions = [.2, .5, .8];
+    const laneX = laneIndex === undefined
+        ? randomInt(sideMargin, Math.max(sideMargin + 1, fieldWidth - sideMargin))
+        : Math.round(fieldWidth * (lanePositions[laneIndex] ?? .5) + randomInt(-12, 12));
+    element.style.left = Math.max(sideMargin, Math.min(fieldWidth - sideMargin, laneX)) + "px";
     element.style.top = startY + "px";
-    const item = { element, value, y: startY, bonus };
+    const item = { element, value, y: startY, bonus, attempted: false };
     element.addEventListener("click", () => popBalloon(item));
     field.append(element);
     balloon.items.push(item);
 }
-function popBalloon(item) {
+function launchBalloonWave() {
     if (!balloon?.running)
+        return;
+    const field = byId("balloonField");
+    balloon.items.forEach((item) => item.element.remove());
+    balloon.items = [];
+    const correctLane = randomInt(0, 2);
+    const wrongLanes = [0, 1, 2].filter((lane) => lane !== correctLane);
+    spawnBalloon(true, correctLane);
+    spawnBalloon(false, wrongLanes[0]);
+    spawnBalloon(false, wrongLanes[1]);
+    balloon.lastSpawn = lifecycleNow();
+    field.classList.remove("rocket-disruption", "wrong-feedback");
+}
+function popBalloon(item) {
+    if (!balloon?.running || balloon.inputLocked || item.attempted)
         return;
     const index = balloon.items.indexOf(item);
     if (index < 0)
@@ -2522,6 +2555,9 @@ function popBalloon(item) {
     }
     if (correctHit) {
         balloonNoteBurst(item.element, item.bonus);
+        balloonRewardBurst(item.element, item.bonus ? 500 : 100 + balloon.combo * 10);
+        byId("balloonField").classList.add("correct-feedback");
+        window.setTimeout(() => byId("balloonField").classList.remove("correct-feedback"), 420);
         balloon.items.splice(index, 1);
         item.element.classList.add("pop");
         window.setTimeout(() => item.element.remove(), 250);
@@ -2530,6 +2566,7 @@ function popBalloon(item) {
         const baseScore = item.bonus ? 500 : 100;
         balloon.score += (baseScore + balloon.combo * 10) * (fever ? 2 : 1);
         balloon.combo = nextCombo;
+        balloon.mistakes = 0;
         byId("balloonFever").textContent = fever ? "FEVER x2" : `${nextCombo} / 8`;
         byId("balloonField").classList.toggle("fever", fever);
         if (item.bonus)
@@ -2539,12 +2576,93 @@ function popBalloon(item) {
         const elapsed = Math.max(0, (lifecycleNow() - balloon.started) / 1000);
         balloon.target = newProblem(difficultyForProgress(Math.min(1, elapsed / 60)));
         correctSound();
+        balloon.inputLocked = true;
+        balloon.items.forEach((remaining) => remaining.element.classList.add("wave-clear"));
+        window.setTimeout(() => {
+            if (!balloon?.running)
+                return;
+            launchBalloonWave();
+            balloon.inputLocked = false;
+        }, 320);
     }
     else {
+        item.attempted = true;
+        item.element.disabled = true;
+        item.element.classList.add("wrong-choice");
+        balloon.score = Math.max(0, balloon.score - 50);
+        balloon.time = Math.max(0, balloon.time - 3);
         balloon.combo = 0;
+        balloon.mistakes += 1;
+        const mistakeChip = byId("balloonMistakes").closest(".balloon-mistake-chip");
+        mistakeChip?.classList.remove("warning", "danger");
+        void mistakeChip?.offsetWidth;
+        mistakeChip?.classList.add(balloon.mistakes >= 3 ? "danger" : "warning");
+        window.setTimeout(() => mistakeChip?.classList.remove("warning", "danger"), 850);
+        balloon.inputLocked = true;
+        byId("balloonField").classList.add("wrong-feedback");
+        balloonPenaltyBurst(item.element, balloon.mistakes >= 3);
         wrongSound();
+        if (balloon.time <= 0) {
+            renderBalloonHud();
+            finishBalloon();
+            return;
+        }
+        if (balloon.mistakes >= 3) {
+            balloon.mistakes = 0;
+            const field = byId("balloonField");
+            field.classList.add("rocket-disruption");
+            balloon.items.forEach((remaining) => remaining.element.classList.add("rocket-sweep"));
+            window.setTimeout(() => {
+                if (!balloon?.running)
+                    return;
+                launchBalloonWave();
+                balloon.inputLocked = false;
+            }, 900);
+        }
+        else {
+            window.setTimeout(() => {
+                if (!balloon?.running)
+                    return;
+                const currentIndex = balloon.items.indexOf(item);
+                if (currentIndex >= 0)
+                    balloon.items.splice(currentIndex, 1);
+                item.element.remove();
+                byId("balloonField").classList.remove("wrong-feedback");
+                balloon.inputLocked = false;
+            }, 520);
+        }
     }
     renderBalloonHud();
+}
+function balloonPenaltyBurst(origin, severe) {
+    const field = byId("balloonField");
+    field.querySelector(".balloon-penalty-alert")?.remove();
+    const alert = document.createElement("div");
+    alert.className = `balloon-penalty-alert${severe ? " severe" : ""}`;
+    const ghost = pokemonMedia(pokemonById(severe ? 94 : 92), "balloon-penalty-pokemon");
+    ghost.setAttribute("aria-hidden", "true");
+    const message = document.createElement("strong");
+    message.textContent = severe ? "팬텀 방해! 풍선을 다시 섞어요" : "고오스 방해! -50점 · -3초";
+    alert.append(ghost, message);
+    const originRect = origin.getBoundingClientRect();
+    const fieldRect = field.getBoundingClientRect();
+    const alertX = Math.max(105, Math.min(fieldRect.width - 105, originRect.left - fieldRect.left + originRect.width / 2));
+    alert.style.setProperty("--penalty-x", `${alertX}px`);
+    alert.style.setProperty("--penalty-y", `${Math.max(70, originRect.top - fieldRect.top)}px`);
+    field.append(alert);
+    window.setTimeout(() => alert.remove(), severe ? 1150 : 800);
+}
+function balloonRewardBurst(origin, points) {
+    const field = byId("balloonField");
+    const fieldRect = field.getBoundingClientRect();
+    const rect = origin.getBoundingClientRect();
+    const reward = document.createElement("strong");
+    reward.className = "balloon-reward-pop";
+    reward.textContent = `+${points}`;
+    reward.style.left = `${rect.left - fieldRect.left + rect.width / 2}px`;
+    reward.style.top = `${Math.max(55, rect.top - fieldRect.top + rect.height * .25)}px`;
+    field.append(reward);
+    window.setTimeout(() => reward.remove(), 900);
 }
 function balloonNoteBurst(origin, bonus) {
     const field = byId("balloonField");
@@ -2570,6 +2688,7 @@ function renderBalloonHud() {
     byId("balloonScore").textContent = String(balloon.score);
     byId("balloonTime").textContent = String(balloon.time);
     byId("balloonCombo").textContent = String(balloon.combo);
+    byId("balloonMistakes").textContent = `${balloon.mistakes} / 3`;
 }
 function finishBalloon() {
     if (!balloon?.running || state.grade === null)
