@@ -4758,6 +4758,79 @@ function cleanupGame() {
     quiz = null;
     knowledge = null;
 }
+let levelUpPopupTimer = null;
+function closeLevelUpPopup() {
+    if (levelUpPopupTimer !== null)
+        window.clearTimeout(levelUpPopupTimer);
+    levelUpPopupTimer = null;
+    const overlay = document.querySelector(".level-up-overlay");
+    if (!overlay)
+        return;
+    overlay.classList.add("leaving");
+    window.setTimeout(() => overlay.remove(), 260);
+}
+function showLevelUpPopup(previousLevel, newLevel, title, reward) {
+    document.querySelector(".level-up-overlay")?.remove();
+    const overlay = document.createElement("div");
+    overlay.className = "level-up-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "levelUpTitle");
+    const panel = document.createElement("section");
+    panel.className = "level-up-popup";
+    const label = document.createElement("span");
+    label.className = "level-up-label";
+    label.textContent = "TRAINER LEVEL UP";
+    const heading = document.createElement("h2");
+    heading.id = "levelUpTitle";
+    heading.textContent = "레벨 업을 축하해요!";
+    const message = document.createElement("p");
+    message.textContent = `${getName() || "친구"} 트레이너가 한 단계 더 성장했어요.`;
+    const hero = document.createElement("div");
+    hero.className = "level-up-hero";
+    const pokemon = document.createElement("div");
+    pokemon.className = "level-up-pokemon";
+    replaceWithPokemon(pokemon, getAvatarId());
+    const badge = document.createElement("div");
+    badge.className = "level-up-badge";
+    const levelFlow = document.createElement("small");
+    levelFlow.textContent = `Lv.${previousLevel} → Lv.${newLevel}`;
+    const levelNumber = document.createElement("strong");
+    levelNumber.textContent = `Lv.${newLevel}`;
+    const rank = document.createElement("b");
+    rank.textContent = title;
+    badge.append(levelFlow, levelNumber, rank);
+    hero.append(pokemon, badge);
+    const rewardBox = document.createElement("div");
+    rewardBox.className = "level-up-reward-box";
+    const rewardLabel = document.createElement("span");
+    rewardLabel.textContent = "새로운 성장 보상";
+    const rewardText = document.createElement("strong");
+    rewardText.textContent = reward;
+    rewardBox.append(rewardLabel, rewardText);
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "level-up-continue";
+    closeButton.textContent = "계속 모험하기";
+    closeButton.addEventListener("click", closeLevelUpPopup);
+    overlay.addEventListener("click", (event) => { if (event.target === overlay)
+        closeLevelUpPopup(); });
+    overlay.addEventListener("keydown", (event) => { if (event.key === "Escape")
+        closeLevelUpPopup(); });
+    for (let index = 0; index < 12; index += 1) {
+        const spark = document.createElement("i");
+        spark.className = "level-up-spark";
+        spark.style.setProperty("--spark-angle", `${index * 30}deg`);
+        spark.style.setProperty("--spark-delay", `${(index % 4) * .08}s`);
+        panel.append(spark);
+    }
+    panel.append(label, heading, message, hero, rewardBox, closeButton);
+    overlay.append(panel);
+    document.body.append(overlay);
+    requestAnimationFrame(() => overlay.classList.add("show"));
+    window.setTimeout(() => closeButton.focus(), 280);
+    levelUpPopupTimer = window.setTimeout(closeLevelUpPopup, 7000);
+}
 function showResult(stars, title, speech, stats) {
     const progress = getTrainerProgress();
     const previous = getTrainerProgress(Math.max(0, progress.stars - stars));
@@ -4775,8 +4848,10 @@ function showResult(stars, title, speech, stats) {
     showScreen("result");
     window.setTimeout(() => playPokemonCry(getAvatarId(), .18), 220);
     pokemonSparkBurst(leveledUp ? 48 : stars >= 2 ? 30 : 14);
-    if (leveledUp)
+    if (leveledUp) {
         levelUpSound();
+        window.setTimeout(() => showLevelUpPopup(previous.current.level, progress.current.level, progress.current.title, progress.current.reward), 380);
+    }
 }
 function openRecords() {
     cleanupGame();
