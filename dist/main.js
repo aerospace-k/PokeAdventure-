@@ -117,7 +117,7 @@ const MODES = {
         hint: "목표 식의 답과 같은 숫자가 적힌 풍선을 선택해요.", colors: ["#35b6d2", "#2584ae"], category: "암산·수 연산"
     },
     space: {
-        name: "나몰빼미의 도형·공간 탐험", description: "회전·위에서 본 모습·쌓기나무·전개도",
+        name: "나몰빼미 도형·공간 탐험", description: "회전·위에서 본 모습·쌓기나무·전개도",
         hint: "나몰빼미와 여러 방향에서 관찰하고 접어 보며 공간 감각을 길러요.", colors: ["#26a69a", "#1565a7"], category: "도형·공간"
     },
     mine: {
@@ -129,12 +129,12 @@ const MODES = {
         hint: "학년에 맞는 네 영역을 여행하며 정답과 함께 짧은 해설을 배워요.", colors: ["#20a878", "#1478a8"], category: "지식탐험"
     },
     symmetry: {
-        name: "파치리스의 대칭 연구소", description: "전기 회로의 반쪽을 보고 좌우대칭을 완성해요",
+        name: "파치리스 대칭 연구소", description: "전기 회로의 반쪽을 보고 좌우대칭을 완성해요",
         hint: "대칭축에서 같은 거리의 칸을 연결해 파치리스의 전기 에너지를 채워요.", colors: ["#52c8e8", "#3976c8"], category: "도형·공간"
     },
     coordinate: {
-        name: "폴리곤 좌표 미로", description: "격자와 좌표를 읽어 목표까지 이동해요",
-        hint: "장애물을 피하고 방향 버튼으로 폴리곤을 움직여요.", colors: ["#2f9cc7", "#4965c7"], category: "도형·공간"
+        name: "폴리곤 좌표 미로", description: "장애물 미로에서 데이터를 모아 목표 좌표로 이동해요",
+        hint: "이동 에너지를 아끼며 데이터 칩을 모두 모아 출구를 열어요.", colors: ["#2f9cc7", "#4965c7"], category: "도형·공간"
     },
     history: {
         name: "발챙이 역사 시간여행", description: "발챙이와 역사 사건을 오래된 순서로 복원해요",
@@ -162,12 +162,12 @@ const TIPS = [
 ];
 const HELP = [
     ["피카츄 암산퀴즈", "10문제를 풀어요. 빠르고 연속으로 맞히면 추가 점수를 받아요."],
-    ["잉어킹 산성비 챌린지", "문제가 땅에 닿기 전에 답을 입력해요. 쉬움은 약 20초의 초기 낙하 시간이 제공돼요."],
+    ["잉어킹 산성비 챌린지", "일반 문제는 땅에 닿기 전에 풀고, 보라색 로켓단 함정은 입력하지 않고 지나가게 해요."],
     ["디그다 찾기", "목표 식의 정답을 든 디그다를 선택해요. 문제 변경 시 화면의 디그다도 함께 바뀌어요."],
     ["짝맞추기", "식 카드와 답 카드를 짝지어요. 게임을 나가면 남은 예약 동작도 안전하게 종료돼요."],
     ["고라파덕 참·거짓 OX", "제시된 식과 답이 맞는지 판단해요. 오답 감점으로 0초가 되면 즉시 끝나요."],
     ["푸린 풍선 터뜨리기", "정답 풍선을 터뜨려 60초 동안 높은 점수에 도전해요."],
-    ["나몰빼미의 도형·공간 탐험", "도형 회전, 위에서 내려다본 모습, 쌓기나무, 거울 대칭과 정육면체 전개도를 학년에 맞춰 해결해요."],
+    ["나몰빼미 도형·공간 탐험", "도형 회전, 위에서 내려다본 모습, 쌓기나무, 거울 대칭과 정육면체 전개도를 학년에 맞춰 해결해요."],
     ["찌리리공 지뢰찾기", "숫자 단서를 보고 안전한 칸을 열어요. 오른쪽 클릭이나 표시 모드로 찌리리공 위치에 몬스터볼을 놓아요."]
 ];
 const VALID_MODES = new Set(Object.keys(MODES));
@@ -693,13 +693,24 @@ function setActiveNav(name) {
     const secondary = new Set(["report", "leaderboard", "records", "help", "about"]);
     const more = byId("sideMoreMenu");
     more.open = false;
+    syncMoreMenuAccessibility();
     more.classList.toggle("has-active", secondary.has(name));
+}
+function syncMoreMenuAccessibility() {
+    const more = byId("sideMoreMenu");
+    const panel = more.querySelector(".side-more-panel");
+    const backdrop = byId("moreMenuBackdrop");
+    panel?.toggleAttribute("inert", !more.open);
+    panel?.setAttribute("aria-hidden", String(!more.open));
+    backdrop.toggleAttribute("inert", !more.open);
+    backdrop.setAttribute("aria-hidden", String(!more.open));
 }
 function closeMoreMenu(restoreFocus = false) {
     const more = byId("sideMoreMenu");
     if (!more.open)
         return;
     more.open = false;
+    syncMoreMenuAccessibility();
     if (restoreFocus)
         more.querySelector("summary")?.focus();
 }
@@ -881,15 +892,6 @@ function openGrades() {
         ["#ff8ebf", "#e5538e"], ["#ff7b72", "#d64a55"], ["#f6a94b", "#db7734"],
         ["#e8bd35", "#c18d16"], ["#37bd7d", "#16855b"], ["#438fff", "#2865c1"], ["#8b6fe8", "#6549bf"]
     ];
-    const gradeBalls = [
-        { sprite: "poke-ball", name: "몬스터볼", tier: "starter" },
-        { sprite: "poke-ball", name: "몬스터볼", tier: "starter" },
-        { sprite: "great-ball", name: "슈퍼볼", tier: "great" },
-        { sprite: "ultra-ball", name: "하이퍼볼", tier: "ultra" },
-        { sprite: "ultra-ball", name: "하이퍼볼", tier: "ultra" },
-        { sprite: "master-ball", name: "마스터볼", tier: "master" },
-        { sprite: "master-ball", name: "마스터볼", tier: "master" }
-    ];
     const requestedGradeBalls = [
         { sprite: "poke-ball", name: "몬스터볼", tier: "starter" },
         { sprite: "great-ball", name: "슈퍼볼", tier: "great" },
@@ -909,7 +911,8 @@ function openGrades() {
         const image = document.createElement("img");
         image.className = "grade-ball-image";
         image.src = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/" + ball.sprite + ".png";
-        image.alt = ball.name;
+        image.alt = "";
+        image.setAttribute("aria-hidden", "true");
         image.loading = "eager";
         const label = document.createElement("small");
         label.className = "grade-ball-name";
@@ -1393,10 +1396,41 @@ function stopQuiz() {
     if (quiz)
         quiz.timer = null;
 }
+function showThemedGameScene(theme, title, subtitle, duration = 1300) {
+    document.querySelector(".themed-game-scene")?.remove();
+    const scene = document.createElement("div");
+    scene.className = "themed-game-scene";
+    scene.dataset.theme = theme;
+    scene.setAttribute("aria-hidden", "true");
+    const copy = document.createElement("div");
+    copy.className = "themed-game-scene-copy";
+    const label = document.createElement("span");
+    const labels = {
+        quiz: "PIKACHU MATH CLASS",
+        balloon: "JIGGLYPUFF SKY CONCERT",
+        coordinate: "PORYGON DATA LAB",
+        ox: "PSYDUCK OX CLASS",
+        mole: "DIGLETT CAVE EXPEDITION",
+        mine: "VOLTORB MEADOW SEARCH",
+        symmetry: "PACHIRISU SYMMETRY LAB",
+        space: "ROWLET FOREST OBSERVATORY",
+        memory: "DITTO TRANSFORM LAB"
+    };
+    label.textContent = labels[theme];
+    const heading = document.createElement("strong");
+    heading.textContent = title;
+    const detail = document.createElement("small");
+    detail.textContent = subtitle;
+    copy.append(label, heading, detail);
+    scene.append(copy);
+    document.body.append(scene);
+    window.setTimeout(() => scene.remove(), duration);
+}
 function startQuiz() {
     quiz = { index: 0, score: 0, correct: 0, streak: 0, best: 0, input: "", locked: false, started: Date.now(), questionStarted: Date.now(), current: null, choiceMode: false, results: [], timer: null };
     replaceWithPokemon(byId("quizMascot"), 25);
     showScreen("quiz");
+    showThemedGameScene("quiz", "피카츄 암산 수업", "빈 칠판에 나타나는 문제를 해결해요!", 1200);
     quiz.timer = window.setInterval(updateQuizTimer, 500);
     nextQuizQuestion();
 }
@@ -1557,6 +1591,7 @@ function finishQuiz() {
     const accuracy = Math.round(game.correct / 10 * 100);
     const stars = accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : accuracy >= 40 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "quiz", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.correct + "/10 · " + accuracy + "%", timestamp: Date.now() });
+    showThemedGameScene("quiz", "오늘의 수업 완료!", accuracy + "%의 문제를 맞혔어요.", 1800);
     showResult(stars, "피카츄 암산퀴즈 완료", accuracy + "%를 맞혔어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/10", "정답"], [String(game.best), "최고 연속"]]);
 }
 let rain = null;
@@ -1579,22 +1614,42 @@ function startRain() {
     rain = {
         running: true, finished: false, hp: 5, score: 0, popped: 0, input: "", drops: [],
         speed: config.speed, gap: config.gap, maxDrops: config.max, started: performance.now(),
-        lastFrame: performance.now(), lastSpawn: performance.now(), raf: 0, watchdog: 0, wave: 1
+        lastFrame: performance.now(), lastSpawn: performance.now(), raf: 0, watchdog: 0, wave: 1, trapsAvoided: 0
     };
     byId("rainField").querySelectorAll(".rain-drop").forEach((drop) => drop.remove());
+    setupRainAmbientPokemon();
     const rainPad = keypad(rainNumber, rainDelete, rainSubmit);
     byId("rainKeypad").replaceChildren(...Array.from(rainPad.childNodes));
     renderRainHud();
     showScreen("rain");
     byId("rainSceneIntro").classList.add("show");
     window.setTimeout(() => byId("rainSceneIntro").classList.remove("show"), 1600);
-    spawnRainDrop();
-    rain.lastSpawn = performance.now();
-    rain.raf = requestAnimationFrame(rainFrame);
+    const session = rain;
+    const launchRain = () => {
+        if (!rain?.running || rain !== session)
+            return;
+        const field = byId("rainField");
+        if (field.clientWidth < 240 || field.clientHeight < 160) {
+            session.lastFrame = performance.now();
+            session.raf = requestAnimationFrame(launchRain);
+            return;
+        }
+        if (session.drops.length === 0)
+            spawnRainDrop();
+        session.lastSpawn = performance.now();
+        session.lastFrame = performance.now();
+        session.raf = requestAnimationFrame(rainFrame);
+    };
+    rain.raf = requestAnimationFrame(launchRain);
     rain.watchdog = window.setInterval(() => {
         if (!rain?.running || document.hidden)
             return;
         const now = performance.now();
+        const field = byId("rainField");
+        if (field.clientWidth < 240 || field.clientHeight < 160) {
+            rain.lastFrame = now;
+            return;
+        }
         if (rain.drops.length === 0 && now - rain.lastSpawn >= 1200) {
             spawnRainDrop();
             rain.lastSpawn = now;
@@ -1610,6 +1665,13 @@ function startRain() {
 function rainFrame(now) {
     if (!rain || !rain.running)
         return;
+    const field = byId("rainField");
+    const height = field.clientHeight;
+    if (field.clientWidth < 240 || height < 160) {
+        rain.lastFrame = now;
+        rain.raf = requestAnimationFrame(rainFrame);
+        return;
+    }
     let delta = (now - rain.lastFrame) / 1000;
     rain.lastFrame = now;
     delta = Math.min(delta, .1);
@@ -1628,8 +1690,6 @@ function rainFrame(now) {
         spawnRainDrop();
         rain.lastSpawn = now;
     }
-    const field = byId("rainField");
-    const height = field.clientHeight;
     const velocity = height * phaseConfig.speed * multiplier;
     for (let index = rain.drops.length - 1; index >= 0; index -= 1) {
         const drop = rain.drops[index];
@@ -1640,9 +1700,14 @@ function rainFrame(now) {
             drop.element.classList.add("warning");
         }
         if (drop.y + drop.element.offsetHeight >= height - 20) {
+            if (drop.trap) {
+                rain.score += 40;
+                rain.trapsAvoided += 1;
+                showRainDropEffect(drop, "함정 회피! +40", "avoid");
+            }
             drop.element.remove();
             rain.drops.splice(index, 1);
-            if (!drop.heal)
+            if (!drop.heal && !drop.trap)
                 loseRainHp();
             if (!rain.running)
                 break;
@@ -1654,19 +1719,47 @@ function rainFrame(now) {
         rain.raf = requestAnimationFrame(rainFrame);
 }
 function spawnRainDrop() {
-    if (!rain)
+    if (!rain?.running)
         return;
     const field = byId("rainField");
-    const problem = newProblem(difficultyForElapsed(rain.started, MAX_GAME_SECONDS));
-    const heal = rain.hp < 5 && Math.random() < .14;
+    if (field.clientWidth < 240 || field.clientHeight < 160)
+        return;
+    let problem = newProblem(difficultyForElapsed(rain.started, MAX_GAME_SECONDS));
+    const elapsed = (performance.now() - rain.started) / 1000;
+    const trap = elapsed >= 18 && !rain.drops.some((item) => item.trap) && Math.random() < Math.min(.22, .1 + elapsed * .0007);
+    for (let attempt = 0; trap && attempt < 4 && rain.drops.some((item) => item.answer === problem.answer); attempt += 1)
+        problem = newProblem(difficultyForElapsed(rain.started, MAX_GAME_SECONDS));
+    const heal = !trap && rain.hp < 5 && Math.random() < .14;
     const drop = document.createElement("div");
-    drop.className = "rain-drop" + (heal ? " heal" : "");
-    drop.textContent = (heal ? "회복 · " : "") + problem.display + " = ?";
+    drop.className = "rain-drop" + (heal ? " heal" : "") + (trap ? " trap" : "");
+    drop.textContent = (trap ? "함정 · " : heal ? "회복 · " : "") + problem.display + " = ?";
+    if (trap)
+        drop.setAttribute("aria-label", "로켓단 함정입니다. 답을 입력하지 마세요.");
     const width = field.clientWidth;
     drop.style.left = randomInt(80, Math.max(85, width - 80)) + "px";
     drop.style.top = "-60px";
     field.append(drop);
-    rain.drops.push({ element: drop, answer: problem.answer, y: -60, heal, warning: false });
+    rain.drops.push({ element: drop, answer: problem.answer, y: -60, heal, trap, warning: false });
+}
+function setupRainAmbientPokemon() {
+    const field = byId("rainField");
+    field.querySelectorAll(".rain-ambient-pokemon").forEach((item) => item.remove());
+    const bird = pokemonMedia({ id: 16, name: "구구" });
+    bird.classList.add("rain-ambient-pokemon", "rain-bird");
+    bird.setAttribute("aria-hidden", "true");
+    const magikarp = pokemonMedia({ id: 129, name: "잉어킹" });
+    magikarp.classList.add("rain-ambient-pokemon", "rain-magikarp");
+    magikarp.setAttribute("aria-hidden", "true");
+    field.append(bird, magikarp);
+}
+function showRainDropEffect(drop, text, kind) {
+    const effect = document.createElement("strong");
+    effect.className = "rain-drop-effect " + kind;
+    effect.textContent = text;
+    effect.style.left = drop.element.style.left;
+    effect.style.top = drop.element.style.top;
+    byId("rainField").append(effect);
+    window.setTimeout(() => effect.remove(), 900);
 }
 function loseRainHp() {
     if (!rain || rain.finished)
@@ -1704,13 +1797,21 @@ function rainSubmit() {
     if (targetIndex >= 0) {
         const drop = rain.drops[targetIndex];
         rain.drops.splice(targetIndex, 1);
-        drop.element.classList.add("pop");
+        drop.element.classList.add(drop.trap ? "trap-triggered" : "pop");
+        if (drop.trap)
+            showRainDropEffect(drop, "함정 발동! -100", "trap");
         window.setTimeout(() => drop.element.remove(), 250);
-        rain.score += 100;
-        rain.popped += 1;
-        if (drop.heal)
-            rain.hp = Math.min(5, rain.hp + 1);
-        correctSound();
+        if (drop.trap) {
+            rain.score = Math.max(0, rain.score - 100);
+            loseRainHp();
+        }
+        else {
+            rain.score += 100;
+            rain.popped += 1;
+            if (drop.heal)
+                rain.hp = Math.min(5, rain.hp + 1);
+            correctSound();
+        }
     }
     else {
         wrongSound();
@@ -1739,7 +1840,7 @@ function finishRain() {
     const stars = game.popped >= 18 ? 3 : game.popped >= 10 ? 2 : game.popped >= 4 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "rain", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.popped + "개 · " + seconds + "초", timestamp: Date.now() });
     showRainFinishScene(game.popped);
-    showResult(stars, "잉어킹 산성비 챌린지 완료", game.popped + "개의 문제를 막았어요.", [[String(game.score), "점수"], [String(game.popped), "해결"], [seconds + "초", "생존"], [String(game.wave), "단계"]]);
+    showResult(stars, "잉어킹 산성비 챌린지 완료", game.popped + "개의 문제를 막았어요.", [[String(game.score), "점수"], [String(game.popped), "해결"], [seconds + "초", "생존"], [String(game.trapsAvoided), "함정 회피"]]);
 }
 function showRainFinishScene(popped) {
     document.querySelector(".rain-finish-scene")?.remove();
@@ -1799,6 +1900,7 @@ function startMole() {
     }
     renderMoleHud();
     showScreen("mole");
+    showThemedGameScene("mole", "디그다 동굴 탐험", "정답을 품은 디그다를 빠르게 찾아요!", 900);
     mole.countdown = window.setInterval(moleTick, 1000);
     scheduleMole();
 }
@@ -1957,11 +2059,11 @@ function finishMole() {
     stopMole();
     const stars = game.hits >= 24 ? 3 : game.hits >= 14 ? 2 : game.hits >= 6 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "mole", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.hits + "마리", timestamp: Date.now() });
+    showThemedGameScene("mole", "동굴 탐험 완료!", game.hits + "마리의 디그다를 찾았어요.", 1700);
     showResult(stars, "디그다 찾기 완료", game.hits + "번 정답을 찾았어요.", [[String(game.score), "점수"], [String(game.hits), "명중"], [String(game.bonusHits), "두트리오 보너스"], [String(game.best), "최고 연속"]]);
 }
 let memory = null;
 let memorySession = 0;
-const MEMORY_POKEMON_IDS = [25, 133, 4, 7, 1, 151, 143, 37, 54, 129, 131, 132, 39, 52, 79, 92, 147, 94, 6, 9, 3, 130, 59, 26, 65, 134, 135, 136];
 const MEMORY_TOTAL_PAIRS = 28;
 function stopMemory() {
     memorySession += 1;
@@ -1989,12 +2091,13 @@ function memoryDelay(callback, delay) {
 }
 function startMemory() {
     const session = ++memorySession;
-    const pool = shuffle(MEMORY_POKEMON_IDS.map((id) => pokemonById(id)));
-    memory = { running: true, session, cards: [], first: null, locked: false, moves: 0, matched: 0, totalMatched: 0, pairs: 4, round: 0, score: 0, combo: 0, bestCombo: 0, mistakes: 0, started: performance.now(), pool, timeouts: new Set(), countdown: null };
+    const pool = shuffle([...POKEMON]);
+    memory = { running: true, session, cards: [], first: null, locked: false, moves: 0, matched: 0, totalMatched: 0, pairs: 4, round: 0, score: 0, combo: 0, bestCombo: 0, mistakes: 0, energy: 3, started: performance.now(), pool, timeouts: new Set(), countdown: null };
     replaceWithPokemon(byId("memoryMascot"), 132);
     buildMemoryRound(0);
     renderMemoryHud();
     showScreen("memory");
+    showThemedGameScene("memory", "메타몽 메모리 게임", "변신한 포켓몬의 위치를 기억해 짝을 찾아요!", 900);
     memory.countdown = window.setInterval(() => {
         if (!memory?.running)
             return;
@@ -2102,6 +2205,7 @@ function flipMemoryCard(index) {
         pokemonSparkBurst(7);
         if (transformBonus)
             playPokemonCry(132, .15);
+        memory.energy = Math.min(3, memory.energy + 1);
         renderMemoryHud();
         if (memory.matched >= memory.pairs) {
             if (memory.round < 3)
@@ -2114,29 +2218,34 @@ function flipMemoryCard(index) {
         memory.locked = true;
         memory.combo = 0;
         memory.mistakes += 1;
-        const remainingChances = Math.max(0, 3 - memory.mistakes);
-        byId("memoryStatus").textContent = remainingChances ? `서로 다른 변신이에요. 남은 기회 ${remainingChances}번!` : "변신 에너지가 모두 소진됐어요!";
+        memory.score = Math.max(0, memory.score - 20);
+        memory.energy = Math.max(0, memory.energy - 1);
+        const confused = memory.energy === 0;
+        if (confused) {
+            memory.score = Math.max(0, memory.score - 80);
+            memory.energy = 1;
+            byId("memoryStatus").textContent = "고오스의 기억 안개! 100점이 줄었지만 에너지 1칸을 회복했어요.";
+            byId("screen-memory").classList.add("memory-confused");
+            playPokemonCry(94, .18);
+            showMistakeEncounter(2);
+        }
+        else {
+            byId("memoryStatus").textContent = `서로 다른 변신이에요. 기억 에너지 ${memory.energy}칸!`;
+        }
         first.element.classList.add("mismatch");
         card.element.classList.add("mismatch");
         wrongSound();
-        if (memory.mistakes >= 3) {
-            byId("screen-memory").classList.add("memory-game-over");
-            playPokemonCry(94, .18);
-            showMistakeEncounter(2);
-            renderMemoryHud();
-            memoryDelay(() => finishMemory(false, true), 1500);
-            return;
-        }
         memoryDelay(() => {
             first.element.classList.remove("mismatch");
             card.element.classList.remove("mismatch");
+            byId("screen-memory").classList.remove("memory-confused");
             first.element.classList.remove("flipped");
             card.element.classList.remove("flipped");
             concealMemoryCard(first);
             concealMemoryCard(card);
             if (memory)
                 memory.locked = false;
-        }, 850);
+        }, confused ? 1150 : 850);
         renderMemoryHud();
     }
 }
@@ -2148,7 +2257,7 @@ function renderMemoryHud() {
     byId("memoryMatched").textContent = String(memory.totalMatched);
     byId("memoryTotal").textContent = String(MEMORY_TOTAL_PAIRS);
     byId("memoryCombo").textContent = String(memory.combo);
-    byId("memoryLives").textContent = "❤️".repeat(Math.max(0, 3 - memory.mistakes)) + "🖤".repeat(Math.min(3, memory.mistakes));
+    byId("memoryLives").textContent = "⚡".repeat(memory.energy) + "·".repeat(3 - memory.energy);
     byId("memoryTransformBar").style.width = `${memory.totalMatched / MEMORY_TOTAL_PAIRS * 100}%`;
     byId("memoryTransformText").textContent = `${memory.totalMatched} / ${MEMORY_TOTAL_PAIRS}`;
     const remaining = Math.max(0, MAX_GAME_SECONDS - Math.floor((performance.now() - memory.started) / 1000));
@@ -2167,6 +2276,7 @@ function finishMemory(timedOut = false, failed = false) {
     saveRecord({ name: getName() || "친구", mode: "memory", grade: state.grade, diff: state.diff, score: game.score + stars * 100, stars, detail: game.totalMatched + "/" + MEMORY_TOTAL_PAIRS + "쌍 · 오답 " + game.mistakes + "회", timestamp: Date.now() });
     const title = failed ? "메타몽 변신 에너지 소진" : timedOut ? "메타몽 변신 도전 완료" : "메타몽 메모리 완성!";
     const message = failed ? "오답이 3번 누적되어 탐험을 마쳤어요. 카드 위치를 기억하고 다시 도전해요." : timedOut ? game.totalMatched + "쌍의 변신을 찾았어요." : "메타몽의 포켓몬 변신 " + MEMORY_TOTAL_PAIRS + "쌍을 모두 찾았어요!";
+    showThemedGameScene("memory", "변신 연구 완료!", "기억한 카드의 짝을 멋지게 찾아냈어요.", 1700);
     showResult(stars, title, message, [[String(game.score + stars * 100), "점수"], [String(game.mistakes) + "/3", "오답"], [String(game.bestCombo), "최고 연속"], [game.totalMatched + "/" + MEMORY_TOTAL_PAIRS, "변신 완성"]]);
 }
 let ox = null;
@@ -2185,6 +2295,7 @@ function startOx() {
     nextOx();
     renderOxHud();
     showScreen("ox");
+    showThemedGameScene("ox", "고라파덕 OX 교실", "수식을 읽고 참인지 거짓인지 판단해요!", 900);
     ox.countdown = window.setInterval(() => {
         if (!ox?.running)
             return;
@@ -2293,6 +2404,7 @@ function finishOx() {
     stopOx();
     const stars = game.correct >= 20 ? 3 : game.correct >= 12 ? 2 : game.correct >= 6 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "ox", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.correct + "개", timestamp: Date.now() });
+    showThemedGameScene("ox", "OX 수업 완료!", game.correct + "개의 문제를 맞혔어요.", 1700);
     showResult(stars, "고라파덕 참·거짓 OX 완료", game.correct + "개를 맞혔어요.", [[String(game.score), "점수"], [String(game.correct), "정답"], [String(game.best), "최고 연속"], ["60초", "시간"]]);
 }
 let balloon = null;
@@ -2315,6 +2427,7 @@ function startBalloon() {
     byId("balloonField").classList.remove("fever");
     renderBalloonHud();
     showScreen("balloon");
+    showThemedGameScene("balloon", "푸린 하늘 콘서트", "정답 풍선만 찾아 멋진 노래를 완성해요!", 850);
     balloon.countdown = window.setInterval(() => {
         if (!balloon?.running)
             return;
@@ -2449,6 +2562,7 @@ function finishBalloon() {
     stopBalloon();
     const stars = game.popped >= 22 ? 3 : game.popped >= 13 ? 2 : game.popped >= 6 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "balloon", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.popped + "개", timestamp: Date.now() });
+    showThemedGameScene("balloon", "하늘 콘서트 완료!", game.popped + "개의 정답 풍선을 터뜨렸어요.", 1800);
     showResult(stars, "푸린 풍선 터뜨리기 완료", game.popped + "개의 정답 풍선을 터뜨렸어요.", [[String(game.score), "점수"], [String(game.popped), "정답"], [String(game.best), "최고 연속"], ["60초", "시간"]]);
 }
 let space = null;
@@ -3014,6 +3128,7 @@ function stopSpace() {
 function startSpace() {
     space = { running: true, locked: false, index: 0, score: 0, correct: 0, streak: 0, best: 0, started: Date.now(), timer: null, nextTimer: null, current: null };
     showScreen("space");
+    showThemedGameScene("space", "나몰빼미 도형 공간 탐험", "숲의 단서를 관찰하고 공간 문제를 해결해요!", 1000);
     space.timer = window.setInterval(() => {
         if (!space?.running)
             return;
@@ -3117,13 +3232,36 @@ function finishSpace() {
     const accuracy = Math.round(game.correct / 10 * 100);
     const stars = accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : accuracy >= 40 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "space", grade: state.grade, diff: "easy", score: game.score, stars, detail: game.correct + "/10 · 공간", timestamp: Date.now() });
+    showThemedGameScene("space", "숲속 관찰 완료!", "나몰빼미와 도형·공간 단서를 해결했어요.", 1700);
     showResult(stars, "도형·공간 탐험 완료", game.correct + "개의 공간 문제를 해결했어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/10", "정답"], [String(game.best), "최고 연속"]]);
 }
 let snack = null;
 const SNACK_ITEM_IMAGES = {
-    berry: ["oran-berry", "sitrus-berry", "pecha-berry", "cheri-berry", "lum-berry"],
-    gold: ["rare-candy"], potion: ["super-potion"], rock: ["hard-stone"]
+    gold: "rare-candy", potion: "super-potion", rock: "hard-stone"
 };
+const SNACK_BERRIES = [
+    { image: "oran-berry", label: "오랭열매", points: 80, weight: 25, minProgress: 0 },
+    { image: "cheri-berry", label: "버치열매", points: 90, weight: 18, minProgress: 0 },
+    { image: "pecha-berry", label: "복슝열매", points: 100, weight: 16, minProgress: 0 },
+    { image: "chesto-berry", label: "유루열매", points: 110, weight: 14, minProgress: .1 },
+    { image: "leppa-berry", label: "과사열매", points: 120, weight: 12, minProgress: .18 },
+    { image: "persim-berry", label: "시몬열매", points: 140, weight: 10, minProgress: .28 },
+    { image: "sitrus-berry", label: "자뭉열매", points: 170, weight: 8, minProgress: .38 },
+    { image: "lum-berry", label: "리샘열매", points: 210, weight: 6, minProgress: .5 },
+    { image: "razz-berry", label: "라즈열매", points: 250, weight: 4, minProgress: .62 },
+    { image: "pinap-berry", label: "파인열매", points: 300, weight: 2, minProgress: .74 }
+];
+function chooseSnackBerry(progress) {
+    const available = SNACK_BERRIES.filter((berry) => progress >= berry.minProgress);
+    const total = available.reduce((sum, berry) => sum + berry.weight, 0);
+    let roll = Math.random() * total;
+    for (const berry of available) {
+        roll -= berry.weight;
+        if (roll <= 0)
+            return berry;
+    }
+    return available[0];
+}
 function stopSnack() {
     if (!snack)
         return;
@@ -3141,7 +3279,11 @@ function stopSnack() {
 }
 function startSnack() {
     snack = { running: true, score: 0, combo: 0, best: 0, time: 60, lives: 3, x: 50, items: [], raf: null, spawnTimer: null, countdown: null, startTimer: null, lastFrame: performance.now(), caught: 0, goldCaught: 0 };
-    byId("snackPlayer").replaceChildren(pokemonMedia({ id: 143, name: "잠만보" }));
+    const snackPlayer = byId("snackPlayer");
+    snackPlayer.className = "snack-player";
+    delete snackPlayer.dataset.eatToken;
+    delete snackPlayer.dataset.moveToken;
+    snackPlayer.replaceChildren(pokemonMedia({ id: 143, name: "잠만보" }));
     byId("snackField").classList.remove("fever");
     byId("snackSceneIntro").classList.add("show");
     showScreen("snack");
@@ -3184,17 +3326,22 @@ function spawnSnackItem() {
     const kind = roll < .06 ? "gold" : roll < .11 ? "potion" : roll < .25 + progress * .1 ? "rock" : "berry";
     const element = document.createElement("div");
     element.className = "snack-item " + kind;
-    const imageName = choose([...SNACK_ITEM_IMAGES[kind]]);
+    const berry = kind === "berry" ? chooseSnackBerry(progress) : null;
+    const imageName = berry?.image ?? SNACK_ITEM_IMAGES[kind];
+    const label = berry?.label ?? (kind === "gold" ? "이상한사탕" : kind === "rock" ? "딱딱한돌" : "회복약");
+    const points = berry?.points ?? (kind === "gold" ? 400 : kind === "rock" ? -120 : 150);
+    if (berry)
+        element.classList.add(points >= 240 ? "rare-berry" : points >= 150 ? "uncommon-berry" : "common-berry");
     const image = document.createElement("img");
     image.src = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/" + imageName + ".png";
-    image.alt = kind === "gold" ? "이상한사탕" : kind === "rock" ? "딱딱한돌" : kind === "potion" ? "회복약" : "나무열매";
+    image.alt = label;
     image.addEventListener("error", () => { element.textContent = kind === "gold" ? "★" : kind === "rock" ? "◆" : kind === "potion" ? "+" : "●"; }, { once: true });
     element.append(image);
     const x = randomInt(7, 93);
     element.style.left = x + "%";
     byId("snackField").append(element);
     const speedScale = kind === "gold" ? .92 : kind === "rock" ? 1.08 : 1;
-    snack.items.push({ element, kind, y: -60, x, speed: (85 + progress * 120 + randomInt(0, 45)) * speedScale });
+    snack.items.push({ element, kind, y: -60, x, speed: (85 + progress * 120 + randomInt(0, 45)) * speedScale, points, label });
 }
 function snackFrame(now) {
     if (!snack?.running)
@@ -3219,6 +3366,30 @@ function snackFrame(now) {
         }
     }
     snack.raf = requestAnimationFrame(snackFrame);
+}
+function animateSnackEating(player, item) {
+    const token = String(performance.now());
+    player.dataset.eatToken = token;
+    player.classList.remove("hurt", "happy", "eating", "rare-bite");
+    void player.offsetWidth;
+    player.classList.add("happy", "eating");
+    if (item.kind === "gold" || item.points >= 240)
+        player.classList.add("rare-bite");
+    window.setTimeout(() => {
+        if (player.dataset.eatToken !== token)
+            return;
+        player.classList.remove("happy", "eating", "rare-bite");
+    }, 360);
+}
+function animateSnackMovement() {
+    const player = byId("snackPlayer");
+    const token = String(performance.now());
+    player.dataset.moveToken = token;
+    player.classList.add("moving");
+    window.setTimeout(() => {
+        if (player.dataset.moveToken === token)
+            player.classList.remove("moving");
+    }, 180);
 }
 function catchSnackItem(item, index) {
     if (!snack)
@@ -3248,23 +3419,23 @@ function catchSnackItem(item, index) {
         snack.best = Math.max(snack.best, snack.combo);
         snack.caught += 1;
         const fever = snack.combo >= 10;
-        const base = item.kind === "gold" ? 300 : item.kind === "potion" ? 150 : 100;
+        const base = item.points;
         const gained = (base + snack.combo * 5) * (fever ? 2 : 1);
         snack.score += gained;
         if (item.kind === "gold")
             snack.goldCaught += 1;
         if (item.kind === "potion")
             snack.lives = Math.min(3, snack.lives + 1);
-        effect.textContent = "+" + gained + (fever ? "  FEVER ×2" : "");
-        player.classList.remove("hurt");
-        player.classList.add("happy");
+        effect.textContent = item.label + "  +" + gained + (fever ? "  FEVER ×2" : "");
+        animateSnackEating(player, item);
         field.classList.toggle("fever", fever);
-        collectSound(item.kind === "gold");
-        if (item.kind === "gold" || snack.combo === 10)
+        collectSound(item.kind === "gold" || item.points >= 240);
+        if (item.kind === "gold" || item.points >= 240 || snack.combo === 10)
             pokemonSparkBurst(item.kind === "gold" ? 9 : 14);
+        if (item.kind === "berry" && item.points >= 240)
+            showToast(item.label + " 발견! 기본 " + item.points + "점!");
         if (snack.combo === 10)
             showToast("10콤보! 잠만보 피버 ×2!");
-        window.setTimeout(() => player.classList.remove("happy"), 420);
     }
     field.append(effect);
     window.setTimeout(() => effect.remove(), 850);
@@ -3275,9 +3446,9 @@ function catchSnackItem(item, index) {
 function positionSnackPlayer() { if (snack)
     byId("snackPlayer").style.left = snack.x + "%"; }
 function moveSnack(amount) { if (!snack?.running)
-    return; snack.x = Math.max(7, Math.min(93, snack.x + amount)); positionSnackPlayer(); }
+    return; snack.x = Math.max(7, Math.min(93, snack.x + amount)); positionSnackPlayer(); animateSnackMovement(); }
 function moveSnackTo(clientX) { if (!snack?.running)
-    return; const rect = byId("snackField").getBoundingClientRect(); snack.x = Math.max(7, Math.min(93, (clientX - rect.left) / rect.width * 100)); positionSnackPlayer(); }
+    return; const rect = byId("snackField").getBoundingClientRect(); snack.x = Math.max(7, Math.min(93, (clientX - rect.left) / rect.width * 100)); positionSnackPlayer(); animateSnackMovement(); }
 function renderSnackHud() { if (!snack)
     return; byId("snackScore").textContent = String(snack.score); byId("snackTime").textContent = String(snack.time); byId("snackCombo").textContent = String(snack.combo); byId("snackLives").textContent = "♥".repeat(snack.lives) + "♡".repeat(3 - snack.lives); byId("snackSpeed").textContent = (1 + (60 - snack.time) / 60 * 1.4).toFixed(1); const feverProgress = Math.min(10, snack.combo); byId("snackFeverBar").style.width = feverProgress * 10 + "%"; byId("snackFeverText").textContent = snack.combo >= 10 ? "FEVER ×2" : feverProgress + "/10"; }
 function finishSnack(outOfLives = false) {
@@ -3300,6 +3471,7 @@ function startSymmetry() {
     symmetry = { running: true, round: 0, score: 0, mistakes: 0, size, source: new Set(), target: new Set(), selected: new Set(), started: Date.now() };
     replaceWithPokemon(byId("symmetryMascot"), 417);
     showScreen("symmetry");
+    showThemedGameScene("symmetry", "파치리스 대칭 연구소", "수정 거울을 따라 대칭 회로를 완성해요!", 900);
     setupSymmetryRound();
 }
 function setupSymmetryRound() {
@@ -3419,6 +3591,7 @@ function finishSymmetry() {
     stopSymmetry();
     const stars = game.mistakes <= 1 ? 3 : game.mistakes <= 4 ? 2 : game.mistakes <= 8 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "symmetry", grade: state.grade, diff: "easy", score: game.score, stars, detail: "5단계 · 실수 " + game.mistakes, timestamp: Date.now() });
+    showThemedGameScene("symmetry", "대칭 연구 완료!", "파치리스의 수정 회로가 환하게 충전됐어요.", 1700);
     showResult(stars, "전기 대칭 연구 완료!", "파치리스의 대칭 회로 5개를 모두 연결했어요.", [[String(game.score), "점수"], [String(game.mistakes), "실수"], [String(game.size) + "×" + game.size, "격자"], ["5/5", "충전"]]);
 }
 let coordinate = null;
@@ -3428,10 +3601,82 @@ function startCoordinate() {
     if (state.grade === null)
         return;
     const size = state.grade <= 1 ? 5 : state.grade <= 3 ? 6 : 7;
-    coordinate = { running: true, stage: 0, score: 0, moves: 0, size, x: 0, y: size - 1, goalX: size - 1, goalY: 0, obstacles: new Set(), started: Date.now() };
+    coordinate = { running: true, transitioning: false, stage: 0, score: 0, moves: 0, stageMoves: 0, moveLimit: 0, retries: 0, size, x: 0, y: size - 1, goalX: size - 1, goalY: 0, obstacles: new Set(), dataCells: new Set(), dataTotal: 0, visited: new Set(), started: Date.now() };
     replaceWithPokemon(byId("coordinateMascot"), 137);
     showScreen("coordinate");
+    showThemedGameScene("coordinate", "폴리곤 데이터 연구소", "좌표를 읽고 데이터 칩을 회수해요!", 1200);
     setupCoordinateStage();
+}
+function coordinatePath(size, obstacles, startX, startY, goalX, goalY) {
+    const startKey = startX + "," + startY;
+    const goalKey = goalX + "," + goalY;
+    const queue = [startKey];
+    const parents = new Map([[startKey, null]]);
+    const directions = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+        const key = queue[cursor];
+        if (key === goalKey)
+            break;
+        const [x, y] = key.split(",").map(Number);
+        directions.forEach(([dx, dy]) => {
+            const nx = x + dx;
+            const ny = y + dy;
+            const nextKey = nx + "," + ny;
+            if (nx < 0 || ny < 0 || nx >= size || ny >= size || obstacles.has(nextKey) || parents.has(nextKey))
+                return;
+            parents.set(nextKey, key);
+            queue.push(nextKey);
+        });
+    }
+    if (!parents.has(goalKey))
+        return null;
+    const path = [];
+    let cursor = goalKey;
+    while (cursor) {
+        const [x, y] = cursor.split(",").map(Number);
+        path.push([x, y]);
+        cursor = parents.get(cursor) ?? null;
+    }
+    return path.reverse();
+}
+function buildCoordinateMaze(size, stage, goalX, goalY) {
+    const startX = 0;
+    const startY = size - 1;
+    const directDistance = Math.abs(goalX - startX) + Math.abs(goalY - startY);
+    let best = null;
+    for (let attempt = 0; attempt < 140; attempt += 1) {
+        const obstacles = new Set();
+        const density = Math.min(.4, .27 + stage * .025);
+        for (let y = 0; y < size; y += 1)
+            for (let x = 0; x < size; x += 1) {
+                const key = x + "," + y;
+                if ((x === startX && y === startY) || (x === goalX && y === goalY))
+                    continue;
+                if (Math.random() < density)
+                    obstacles.add(key);
+            }
+        obstacles.delete("1," + startY);
+        obstacles.delete(startX + "," + (startY - 1));
+        const path = coordinatePath(size, obstacles, startX, startY, goalX, goalY);
+        if (!path)
+            continue;
+        if (!best || path.length > best.path.length)
+            best = { obstacles, path };
+        if (path.length - 1 >= directDistance + 2 + Math.floor(stage / 2))
+            return { obstacles, path };
+    }
+    if (best && best.path.length - 1 > directDistance)
+        return best;
+    const obstacles = new Set();
+    for (let x = 1; x < size - 1; x += 2) {
+        const gap = x % 4 === 1 ? 0 : size - 1;
+        for (let y = 0; y < size; y += 1)
+            if (y !== gap)
+                obstacles.add(x + "," + y);
+    }
+    obstacles.delete(goalX + "," + goalY);
+    const path = coordinatePath(size, obstacles, startX, startY, goalX, goalY) ?? coordinatePath(size, new Set(), startX, startY, goalX, goalY) ?? [[startX, startY], [goalX, goalY]];
+    return { obstacles: path.length > directDistance + 1 ? obstacles : new Set(), path };
 }
 function setupCoordinateStage() {
     if (!coordinate?.running)
@@ -3441,44 +3686,64 @@ function setupCoordinateStage() {
         return;
     }
     const size = coordinate.size;
+    coordinate.transitioning = false;
     coordinate.x = 0;
     coordinate.y = size - 1;
-    coordinate.goalX = size - 1;
-    coordinate.goalY = coordinate.stage % 2 === 0 ? 0 : randomInt(0, size - 2);
-    coordinate.obstacles.clear();
-    const safe = new Set();
-    for (let x = 0; x < size; x += 1)
-        safe.add(x + "," + (size - 1));
-    for (let y = coordinate.goalY; y < size; y += 1)
-        safe.add((size - 1) + "," + y);
-    for (let y = 0; y < size; y += 1)
-        for (let x = 0; x < size; x += 1)
-            if (!safe.has(x + "," + y) && Math.random() < .2)
-                coordinate.obstacles.add(x + "," + y);
+    coordinate.stageMoves = 0;
+    if (coordinate.stage % 2 === 0) {
+        coordinate.goalX = size - 1;
+        coordinate.goalY = randomInt(0, Math.max(0, Math.floor(size / 2) - 1));
+    }
+    else {
+        coordinate.goalX = randomInt(Math.ceil(size / 2), size - 1);
+        coordinate.goalY = 0;
+    }
+    const maze = buildCoordinateMaze(size, coordinate.stage, coordinate.goalX, coordinate.goalY);
+    coordinate.obstacles = maze.obstacles;
+    coordinate.dataCells.clear();
+    coordinate.dataTotal = Math.min(3, 1 + Math.floor(coordinate.stage / 2));
+    for (let index = 1; index <= coordinate.dataTotal; index += 1) {
+        const pathIndex = Math.max(1, Math.min(maze.path.length - 2, Math.round((maze.path.length - 1) * index / (coordinate.dataTotal + 1))));
+        const [x, y] = maze.path[pathIndex];
+        coordinate.dataCells.add(x + "," + y);
+    }
+    coordinate.moveLimit = maze.path.length - 1 + Math.max(3, Math.ceil(size / 2) + coordinate.stage);
+    coordinate.visited = new Set([coordinate.x + "," + coordinate.y]);
     renderCoordinate();
 }
 function renderCoordinate() {
     if (!coordinate)
         return;
+    const collected = coordinate.dataTotal - coordinate.dataCells.size;
     byId("coordinateScore").textContent = String(coordinate.score);
     byId("coordinateStage").textContent = (coordinate.stage + 1) + "/5";
-    byId("coordinateMoves").textContent = String(coordinate.moves);
-    byId("coordinateMission").textContent = "폴리곤을 목표 좌표 (" + (coordinate.goalX + 1) + ", " + (coordinate.size - coordinate.goalY) + ")까지 옮겨요.";
+    byId("coordinateMoves").textContent = coordinate.stageMoves + "/" + coordinate.moveLimit;
+    byId("coordinateMission").textContent = "데이터 칩을 모두 모아 목표 좌표 (" + (coordinate.goalX + 1) + ", " + (coordinate.size - coordinate.goalY) + ")의 출구를 열어요.";
+    byId("coordinateProgress").textContent = "데이터 " + collected + "/" + coordinate.dataTotal + " · 남은 에너지 " + Math.max(0, coordinate.moveLimit - coordinate.stageMoves);
     const board = byId("coordinateBoard");
     board.style.setProperty("--coordinate-size", String(coordinate.size));
     board.replaceChildren();
     for (let y = 0; y < coordinate.size; y += 1)
         for (let x = 0; x < coordinate.size; x += 1) {
+            const key = x + "," + y;
             const cell = document.createElement("div");
             cell.className = "coordinate-cell";
             cell.title = "(" + (x + 1) + ", " + (coordinate.size - y) + ")";
-            if (coordinate.obstacles.has(x + "," + y)) {
+            if (coordinate.visited.has(key))
+                cell.classList.add("visited");
+            if (coordinate.obstacles.has(key)) {
                 cell.classList.add("obstacle");
-                cell.textContent = "◆";
+                cell.textContent = "▦";
+            }
+            if (coordinate.dataCells.has(key)) {
+                cell.classList.add("data-chip");
+                cell.textContent = "◇";
             }
             if (x === coordinate.goalX && y === coordinate.goalY) {
                 cell.classList.add("goal");
-                cell.textContent = "★";
+                if (coordinate.dataCells.size > 0)
+                    cell.classList.add("locked");
+                cell.textContent = coordinate.dataCells.size > 0 ? "●" : "★";
             }
             if (x === coordinate.x && y === coordinate.y) {
                 cell.classList.add("player");
@@ -3494,37 +3759,69 @@ function renderCoordinate() {
         }
 }
 function moveCoordinate(direction) {
-    if (!coordinate?.running)
+    if (!coordinate?.running || coordinate.transitioning)
         return;
     const delta = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
     const [dx, dy] = delta[direction] ?? [0, 0];
     const nx = coordinate.x + dx;
     const ny = coordinate.y + dy;
+    coordinate.stageMoves += 1;
+    coordinate.moves += 1;
     if (nx < 0 || ny < 0 || nx >= coordinate.size || ny >= coordinate.size || coordinate.obstacles.has(nx + "," + ny)) {
+        coordinate.score = Math.max(0, coordinate.score - 5);
         wrongSound();
-        showToast("그 방향은 지나갈 수 없어요.");
+        showToast("장애물이에요. 이동 에너지 1을 사용했어요.");
+        if (coordinate.stageMoves >= coordinate.moveLimit)
+            resetCoordinateStage();
+        else
+            renderCoordinate();
         return;
     }
     coordinate.x = nx;
     coordinate.y = ny;
-    coordinate.moves += 1;
+    coordinate.visited.add(nx + "," + ny);
     moveSound();
-    if (nx === coordinate.goalX && ny === coordinate.goalY) {
-        coordinate.score += Math.max(80, 260 - coordinate.moves * 4);
-        coordinate.stage += 1;
+    const positionKey = nx + "," + ny;
+    if (coordinate.dataCells.delete(positionKey)) {
+        coordinate.score += 50;
         correctSound();
-        window.setTimeout(setupCoordinateStage, 600);
+        showToast("데이터 칩 획득! 출구 잠금이 약해졌어요.");
     }
+    if (nx === coordinate.goalX && ny === coordinate.goalY && coordinate.dataCells.size > 0) {
+        wrongSound();
+        showToast("출구가 잠겨 있어요. 남은 데이터 칩을 찾아요.");
+    }
+    if (nx === coordinate.goalX && ny === coordinate.goalY && coordinate.dataCells.size === 0) {
+        coordinate.score += 180 + Math.max(0, coordinate.moveLimit - coordinate.stageMoves) * 12;
+        coordinate.stage += 1;
+        coordinate.transitioning = true;
+        correctSound();
+        pokemonSparkBurst(137);
+        window.setTimeout(setupCoordinateStage, 650);
+    }
+    else if (coordinate.stageMoves >= coordinate.moveLimit)
+        resetCoordinateStage();
     renderCoordinate();
+}
+function resetCoordinateStage() {
+    if (!coordinate)
+        return;
+    coordinate.retries += 1;
+    coordinate.score = Math.max(0, coordinate.score - 40);
+    coordinate.transitioning = true;
+    wrongSound();
+    showToast("이동 에너지가 부족해요. 새 지도로 다시 도전해요.");
+    window.setTimeout(setupCoordinateStage, 650);
 }
 function finishCoordinate() {
     if (!coordinate?.running || state.grade === null)
         return;
     const game = coordinate;
     stopCoordinate();
-    const stars = game.moves <= game.size * 7 ? 3 : game.moves <= game.size * 10 ? 2 : 1;
-    saveRecord({ name: getName() || "친구", mode: "coordinate", grade: state.grade, diff: "easy", score: game.score, stars, detail: "5지도 · " + game.moves + "이동", timestamp: Date.now() });
-    showResult(stars, "좌표 미로 탈출!", "폴리곤과 다섯 개 지도를 통과했어요.", [[String(game.score), "점수"], [String(game.moves), "이동"], [String(game.size) + "×" + game.size, "지도"], ["5/5", "완료"]]);
+    const stars = game.retries === 0 ? 3 : game.retries <= 2 ? 2 : 1;
+    saveRecord({ name: getName() || "친구", mode: "coordinate", grade: state.grade, diff: "easy", score: game.score, stars, detail: "5지도 · 재도전 " + game.retries + "회", timestamp: Date.now() });
+    showThemedGameScene("coordinate", "데이터 연구 완료!", "다섯 개 좌표 미로를 모두 통과했어요.", 1800);
+    showResult(stars, "좌표 미로 탈출!", "폴리곤과 다섯 개 데이터 미로를 통과했어요.", [[String(game.score), "점수"], [String(game.moves), "총 이동"], [String(game.retries), "재도전"], ["5/5", "완료"]]);
 }
 const HISTORY_EVENTS = [
     { year: -70000, label: "사람들이 돌을 다듬어 도구로 사용했어요", yearLabel: "구석기 시대", minGrade: 0 }, { year: -8000, label: "농사를 짓고 한곳에 모여 살기 시작했어요", yearLabel: "신석기 시대", minGrade: 0 },
@@ -3543,7 +3840,7 @@ function startHistory() {
     const grade = state.grade;
     const pool = HISTORY_EVENTS.filter((event) => event.minGrade <= grade);
     const events = shuffle([...pool]).slice(0, Math.min(8, pool.length));
-    historyGame = { running: true, events, remaining: new Set(events.map((event) => event.year)), score: 0, mistakes: 0, streak: 0, bestStreak: 0, lastWrongYear: null, started: Date.now() };
+    historyGame = { running: true, events, remaining: new Set(events.map((event) => event.year)), score: 0, mistakes: 0, streak: 0, bestStreak: 0, lastWrongYear: null, started: Date.now(), rewardMilestone: 0 };
     replaceWithPokemon(byId("historyMascot"), 60);
     showScreen("history");
     renderHistory();
@@ -3556,6 +3853,12 @@ function renderHistory() {
     byId("historyCount").textContent = completed + "/" + historyGame.events.length;
     byId("historyStreak").textContent = String(historyGame.streak);
     byId("historyMistakes").textContent = String(historyGame.mistakes);
+    byId("historyEnergyBar").style.width = String(completed / Math.max(1, historyGame.events.length) * 100) + "%";
+    byId("historyEnergyText").textContent = completed + " / " + historyGame.events.length;
+    if (completed > 0 && completed % 2 === 0 && completed > historyGame.rewardMilestone) {
+        historyGame.rewardMilestone = completed;
+        showKnowledgeReward("screen-history", "timeline", "시간 물결 복원!", completed + "개의 역사 사건을 연결했어요.", 60);
+    }
     byId("historyMissionText").textContent = completed ? completed + "개의 시대를 연결했어요" : "첫 사건을 찾아보세요";
     const timeline = byId("historyTimeline");
     timeline.replaceChildren();
@@ -3652,7 +3955,7 @@ function startSafety() {
         return;
     const grade = state.grade;
     const questions = shuffle(SAFETY_QUESTIONS.filter((question) => question.minGrade <= grade)).slice(0, 10);
-    safety = { running: true, questions, index: 0, score: 0, correct: 0, streak: 0, locked: false, started: Date.now() };
+    safety = { running: true, questions, index: 0, score: 0, correct: 0, streak: 0, locked: false, started: Date.now(), rewardMilestone: 0 };
     replaceWithPokemon(byId("safetyMascot"), 7);
     showScreen("safety");
     nextSafety();
@@ -3707,6 +4010,10 @@ function renderSafetyShield() {
     byId("safetyShieldBar").style.width = `${safety.correct / total * 100}%`;
     byId("safetyShieldText").textContent = `${safety.correct} / ${total}`;
     document.querySelector("#screen-safety .safety-shield")?.classList.toggle("charged", safety.correct === total);
+    if (safety.correct > 0 && safety.correct % 3 === 0 && safety.correct > safety.rewardMilestone) {
+        safety.rewardMilestone = safety.correct;
+        showKnowledgeReward("screen-safety", "rescue", "구조대 연속 임무 성공!", "안전한 선택을 3번 연속으로 해냈어요. 보너스 방패를 획득했어요.", 7);
+    }
 }
 function answerSafety(correct, selected, indexed) {
     if (!safety?.running || safety.locked)
@@ -3804,6 +4111,35 @@ const KNOWLEDGE_QUESTIONS = [
     { category: "생활", prompt: "저작권을 지키며 인터넷 자료를 사용하는 방법은?", choices: ["이용 조건을 확인하고 출처를 밝히기", "검색되면 마음대로 쓰기", "만든 사람 이름 지우기", "유료 자료를 공유하기"], answer: 0, explanation: "자료의 라이선스와 이용 범위를 확인하고 필요한 경우 허락을 받은 뒤 출처를 표시해요.", minGrade: 5, maxGrade: 6, tier: 3 }
 ];
 let knowledge = null;
+let knowledgeDiscoveries = new Set();
+function showKnowledgeReward(screenId, kind, title, detail, pokemonId) {
+    const screen = byId(screenId);
+    screen.querySelector(".knowledge-reward-burst")?.remove();
+    const reward = document.createElement("div");
+    reward.className = "knowledge-reward-burst " + kind;
+    reward.setAttribute("role", "status");
+    reward.setAttribute("aria-live", "polite");
+    const mascot = document.createElement("div");
+    mascot.className = "knowledge-reward-pokemon";
+    replaceWithPokemon(mascot, pokemonId);
+    const copy = document.createElement("div");
+    const label = kind === "discovery" ? "NEW DISCOVERY" : kind === "timeline" ? "TIME RESTORED" : "RESCUE BONUS";
+    copy.innerHTML = "<span>" + label + "</span><strong>" + title + "</strong><small>" + detail + "</small>";
+    reward.append(mascot, copy);
+    screen.append(reward);
+    window.setTimeout(() => reward.classList.add("leaving"), 1250);
+    window.setTimeout(() => reward.remove(), 1650);
+}
+function renderKnowledgeBadge() {
+    const badge = byId("knowledgeBadge");
+    const value = badge.querySelector("b");
+    if (value)
+        value.textContent = knowledgeDiscoveries.size + " / 4";
+    badge.classList.toggle("complete", knowledgeDiscoveries.size === 4);
+    document.querySelectorAll(".knowledge-route [data-zone]").forEach((zone) => {
+        zone.classList.toggle("discovered", knowledgeDiscoveries.has(zone.dataset.zone));
+    });
+}
 function knowledgeQuestionsForGrade(grade) {
     const available = KNOWLEDGE_QUESTIONS.filter((question) => grade >= question.minGrade && grade <= question.maxGrade);
     const selected = [];
@@ -3820,11 +4156,12 @@ function knowledgeQuestionsForGrade(grade) {
 function startKnowledge() {
     if (state.grade === null)
         return;
+    knowledgeDiscoveries = new Set();
     knowledge = {
         questions: knowledgeQuestionsForGrade(state.grade), index: 0, score: 0, correct: 0, streak: 0, best: 0,
         locked: false, started: Date.now(), running: true, timer: null
     };
-    replaceWithTrainer(byId("knowledgePartner"), "oak.png", "오박사");
+    replaceWithPokemon(byId("knowledgePartner"), 151);
     showScreen("knowledge");
     nextKnowledgeQuestion();
     knowledge.timer = window.setInterval(() => {
@@ -3868,6 +4205,7 @@ function nextKnowledgeQuestion() {
     document.querySelectorAll(".knowledge-route [data-zone]").forEach((zone) => {
         zone.classList.toggle("active", zone.dataset.zone === question.category);
     });
+    renderKnowledgeBadge();
     renderKnowledgeHud();
 }
 function answerKnowledge(index, selected) {
@@ -3892,6 +4230,8 @@ function answerKnowledge(index, selected) {
             button.classList.add("correct");
     });
     if (correct) {
+        const firstDiscovery = !knowledgeDiscoveries.has(question.category);
+        knowledgeDiscoveries.add(question.category);
         knowledge.correct += 1;
         knowledge.streak += 1;
         knowledge.best = Math.max(knowledge.best, knowledge.streak);
@@ -3901,7 +4241,12 @@ function answerKnowledge(index, selected) {
         byId("knowledgeExplanation").className = "knowledge-explanation correct";
         byId("knowledgeExplanation").textContent = (mistakes ? "재도전 성공! " : "정답! ") + question.explanation;
         correctSound();
-        pokemonSparkBurst(8);
+        pokemonSparkBurst(151);
+        renderKnowledgeBadge();
+        if (firstDiscovery)
+            showKnowledgeReward("screen-knowledge", "discovery", question.category + " 지역 발견!", "뮤가 새로운 지식 배지를 지도에 기록했어요.", 151);
+        else if (knowledge.streak > 0 && knowledge.streak % 3 === 0)
+            showKnowledgeReward("screen-knowledge", "discovery", knowledge.streak + "연속 탐험 성공!", "뮤가 연속 정답 보너스를 발견했어요.", 151);
     }
     else {
         knowledge.streak = 0;
@@ -3932,6 +4277,7 @@ function renderKnowledgeHud() {
         dot.textContent = index < knowledge.index ? "✓" : String(index + 1);
         progress.append(dot);
     }
+    renderKnowledgeBadge();
 }
 function stopKnowledge() {
     if (!knowledge)
@@ -3985,6 +4331,7 @@ function startMine() {
     };
     setupMineStage(0);
     showScreen("mine");
+    showThemedGameScene("mine", "찌리리공 초원 수색", "안전한 칸을 열고 숨은 찌리리공을 표시해요!", 1100);
     mine.timer = window.setInterval(() => {
         if (!mine?.running)
             return;
@@ -4255,6 +4602,7 @@ function finishMine(won) {
     const stars = won ? 3 : completed >= 2 ? 2 : completed >= 1 ? 1 : 0;
     stopMine();
     saveRecord({ name: getName() || "친구", mode: "mine", grade: state.grade, diff: "easy", score: game.score, stars, detail: completed + "/3 루트", timestamp: Date.now() });
+    showThemedGameScene("mine", won ? "초원 수색 성공!" : "다시 도전해요!", "안전한 길을 차근차근 찾아보세요.", 1700);
     showResult(stars, won ? "찌리리공 탐색 완료!" : "찌리리공을 만났어요", won ? "세 개의 루트를 모두 안전하게 통과했어요." : "숫자 단서를 다시 살펴보면 다음에는 피할 수 있어요.", [[String(game.score), "점수"], [completed + "/3", "완료 루트"], [seconds + "초", "시간"], [String(game.flags), "표시"]]);
 }
 function cleanupGame() {
@@ -4771,6 +5119,9 @@ function bindEvents() {
         showAvatarPicker(true);
     });
     byId("closeAvatar").addEventListener("click", closeAvatarPicker);
+    const sideMoreMenu = byId("sideMoreMenu");
+    sideMoreMenu.addEventListener("toggle", syncMoreMenuAccessibility);
+    syncMoreMenuAccessibility();
     byId("closeMoreMenu").addEventListener("click", () => closeMoreMenu(true));
     byId("moreMenuBackdrop").addEventListener("click", () => closeMoreMenu(true));
     document.addEventListener("keydown", (event) => {
