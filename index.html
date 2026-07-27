@@ -11,7 +11,8 @@
   <link rel="shortcut icon" href="./assets/pokeball-favicon-32.png?v=1.0.20260726.6">
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/pokeball-apple-touch-icon.png?v=1.0.20260726.6">
   <link rel="manifest" href="./site.webmanifest?v=1.0.20260726.6">
-    <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260727.49">
+    <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260727.56">
+  <script>document.documentElement.dataset.introScene = Math.random() < 0.5 ? "adventure" : "rocket";</script>
   <meta name="application-name" content="포켓몬 배움 탐험대">
   <meta name="app-version" content="1.0">
   <meta name="theme-color" content="#78c9f3">
@@ -31,8 +32,17 @@
           <img class="intro-trainer intro-trainer-ash" src="https://play.pokemonshowdown.com/sprites/trainers/ash.png" alt="">
           <img class="intro-trainer intro-trainer-brock" src="https://play.pokemonshowdown.com/sprites/trainers/brock.png" alt="">
         </div>
+        <div class="intro-rocket-scene">
+          <span class="intro-rocket-spotlight"></span>
+          <img class="intro-rocket-trainers" src="https://play.pokemonshowdown.com/sprites/trainers/jessiejames-gen1.png" alt="">
+          <img class="intro-rocket-pokemon intro-rocket-meowth" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/52.png" alt="">
+          <img class="intro-rocket-pokemon intro-rocket-wobbuffet" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/202.png" alt="">
+          <img class="intro-rocket-pokemon intro-rocket-gengar" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/94.png" alt="">
+          <img class="intro-rocket-pokemon intro-rocket-gastly intro-rocket-gastly-one" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/92.png" alt="">
+          <img class="intro-rocket-pokemon intro-rocket-gastly intro-rocket-gastly-two" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/92.png" alt="">
+        </div>
         <div id="introMascot" class="intro-mascot"></div>
-        <img class="intro-friend intro-eevee" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/133.png" alt="">
+        <img class="intro-friend intro-charmander" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/4.png" alt="">
         <img class="intro-friend intro-bulbasaur" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/1.png" alt="">
         <img class="intro-friend intro-squirtle" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/7.png" alt="">
         <span class="intro-route"></span>
