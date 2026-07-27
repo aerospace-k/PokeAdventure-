@@ -1992,8 +1992,15 @@ function showMoleSuccess(index, gained, bonus, combo) {
     hole.button.parentElement?.classList.add("hit-success");
     if (bonus)
         hole.button.parentElement?.classList.add("bonus-success");
-    celebration.className = "mole-celebration show" + (bonus ? " bonus" : "");
-    celebration.innerHTML = "<strong>" + (bonus ? "두트리오 대성공!" : "정답!") + "</strong><span>+" + gained + "점" + (combo >= 2 ? " · " + combo + "연속" : "") + "</span>";
+    celebration.className = "mole-celebration";
+    celebration.replaceChildren();
+    const localCelebration = document.createElement("div");
+    const row = Math.floor(index / 3);
+    const column = index % 3;
+    localCelebration.className = "mole-local-celebration " + (row === 0 ? "place-below" : "place-above") + " column-" + column + (bonus ? " bonus" : "");
+    localCelebration.innerHTML = "<strong>" + (bonus ? "두트리오 대성공!" : "정답!") + "</strong><span>+" + gained + "점" + (combo >= 2 ? " · " + combo + "연속" : "") + "</span>";
+    hole.button.parentElement?.querySelector(".mole-local-celebration")?.remove();
+    hole.button.parentElement?.append(localCelebration);
     screen.classList.remove("mole-correct-flash", "mole-bonus-flash");
     void screen.offsetWidth;
     screen.classList.add(bonus ? "mole-bonus-flash" : "mole-correct-flash");
@@ -2002,6 +2009,7 @@ function showMoleSuccess(index, gained, bonus, combo) {
         navigator.vibrate(bonus ? [45, 35, 80] : 45);
     window.setTimeout(() => {
         scorePop.remove();
+        localCelebration.remove();
         celebration.className = "mole-celebration";
         celebration.replaceChildren();
         screen.classList.remove("mole-correct-flash", "mole-bonus-flash");
@@ -3736,7 +3744,7 @@ function startCoordinate() {
     if (state.grade === null)
         return;
     const size = state.grade <= 1 ? 5 : state.grade <= 3 ? 6 : 7;
-    coordinate = { running: true, transitioning: false, stage: 0, score: 0, moves: 0, stageMoves: 0, moveLimit: 0, retries: 0, size, x: 0, y: size - 1, goalX: size - 1, goalY: 0, obstacles: new Set(), dataCells: new Set(), dataTotal: 0, visited: new Set(), started: Date.now() };
+    coordinate = { running: true, transitioning: false, stage: 0, score: 0, moves: 0, stageMoves: 0, moveLimit: 0, retries: 0, baseSize: size, size, x: 0, y: size - 1, goalX: size - 1, goalY: 0, obstacles: new Set(), dataCells: new Set(), dataTotal: 0, visited: new Set(), started: Date.now() };
     replaceWithPokemon(byId("coordinateMascot"), 137);
     showScreen("coordinate");
     showThemedGameScene("coordinate", "폴리곤 데이터 연구소", "좌표를 읽고 데이터 칩을 회수해요!", 1200);
@@ -3778,10 +3786,12 @@ function buildCoordinateMaze(size, stage, goalX, goalY) {
     const startX = 0;
     const startY = size - 1;
     const directDistance = Math.abs(goalX - startX) + Math.abs(goalY - startY);
+    const minimumObstacles = Math.max(4, Math.floor(size * size * (.22 + stage * .018)));
+    const minimumDetour = 3 + Math.floor(stage / 2);
     let best = null;
-    for (let attempt = 0; attempt < 140; attempt += 1) {
+    for (let attempt = 0; attempt < 240; attempt += 1) {
         const obstacles = new Set();
-        const density = Math.min(.4, .27 + stage * .025);
+        const density = Math.min(.44, .3 + stage * .025);
         for (let y = 0; y < size; y += 1)
             for (let x = 0; x < size; x += 1) {
                 const key = x + "," + y;
@@ -3790,28 +3800,49 @@ function buildCoordinateMaze(size, stage, goalX, goalY) {
                 if (Math.random() < density)
                     obstacles.add(key);
             }
-        obstacles.delete("1," + startY);
-        obstacles.delete(startX + "," + (startY - 1));
         const path = coordinatePath(size, obstacles, startX, startY, goalX, goalY);
-        if (!path)
+        if (!path || obstacles.size < minimumObstacles)
             continue;
-        if (!best || path.length > best.path.length)
+        const detour = path.length - 1 - directDistance;
+        if (!best || detour > best.path.length - 1 - directDistance || (detour === best.path.length - 1 - directDistance && obstacles.size > best.obstacles.size))
             best = { obstacles, path };
-        if (path.length - 1 >= directDistance + 2 + Math.floor(stage / 2))
+        if (detour >= minimumDetour)
             return { obstacles, path };
     }
-    if (best && best.path.length - 1 > directDistance)
-        return best;
+    /* Guaranteed fallback: alternating walls force a long zigzag instead of an empty board. */
     const obstacles = new Set();
     for (let x = 1; x < size - 1; x += 2) {
-        const gap = x % 4 === 1 ? 0 : size - 1;
+        const gap = ((x - 1) / 2) % 2 === 0 ? 0 : size - 1;
         for (let y = 0; y < size; y += 1)
             if (y !== gap)
                 obstacles.add(x + "," + y);
     }
+    obstacles.delete(startX + "," + startY);
     obstacles.delete(goalX + "," + goalY);
-    const path = coordinatePath(size, obstacles, startX, startY, goalX, goalY) ?? coordinatePath(size, new Set(), startX, startY, goalX, goalY) ?? [[startX, startY], [goalX, goalY]];
-    return { obstacles: path.length > directDistance + 1 ? obstacles : new Set(), path };
+    const fallbackPath = coordinatePath(size, obstacles, startX, startY, goalX, goalY);
+    if (fallbackPath)
+        return { obstacles, path: fallbackPath };
+    if (best)
+        return best;
+    /* Last-resort carved corridor still keeps every non-route cell blocked. */
+    const carved = new Set();
+    let cx = startX;
+    let cy = startY;
+    carved.add(cx + "," + cy);
+    while (cy > goalY) {
+        cy -= 1;
+        carved.add(cx + "," + cy);
+    }
+    while (cx < goalX) {
+        cx += 1;
+        carved.add(cx + "," + cy);
+    }
+    const solid = new Set();
+    for (let y = 0; y < size; y += 1)
+        for (let x = 0; x < size; x += 1)
+            if (!carved.has(x + "," + y))
+                solid.add(x + "," + y);
+    return { obstacles: solid, path: Array.from(carved).map((key) => key.split(",").map(Number)) };
 }
 function setupCoordinateStage() {
     if (!coordinate?.running)
@@ -3820,6 +3851,7 @@ function setupCoordinateStage() {
         finishCoordinate();
         return;
     }
+    coordinate.size = Math.min(7, coordinate.baseSize + Math.floor(coordinate.stage / 2));
     const size = coordinate.size;
     coordinate.transitioning = false;
     coordinate.x = 0;
@@ -3842,7 +3874,8 @@ function setupCoordinateStage() {
         const [x, y] = maze.path[pathIndex];
         coordinate.dataCells.add(x + "," + y);
     }
-    coordinate.moveLimit = maze.path.length - 1 + Math.max(3, Math.ceil(size / 2) + coordinate.stage);
+    const energySlack = coordinate.stage === 0 ? 3 : coordinate.stage <= 2 ? 2 : 1;
+    coordinate.moveLimit = maze.path.length - 1 + energySlack;
     coordinate.visited = new Set([coordinate.x + "," + coordinate.y]);
     renderCoordinate();
 }
@@ -3854,7 +3887,10 @@ function renderCoordinate() {
     byId("coordinateStage").textContent = (coordinate.stage + 1) + "/5";
     byId("coordinateMoves").textContent = coordinate.stageMoves + "/" + coordinate.moveLimit;
     byId("coordinateMission").textContent = "데이터 칩을 모두 모아 목표 좌표 (" + (coordinate.goalX + 1) + ", " + (coordinate.size - coordinate.goalY) + ")의 출구를 열어요.";
-    byId("coordinateProgress").textContent = "데이터 " + collected + "/" + coordinate.dataTotal + " · 남은 에너지 " + Math.max(0, coordinate.moveLimit - coordinate.stageMoves);
+    const remainingEnergy = Math.max(0, coordinate.moveLimit - coordinate.stageMoves);
+    const progress = byId("coordinateProgress");
+    progress.textContent = "데이터 " + collected + "/" + coordinate.dataTotal + " · 남은 에너지 " + remainingEnergy + " · 충돌/재방문 2칸";
+    progress.classList.toggle("low-energy", remainingEnergy <= Math.max(2, Math.ceil(coordinate.moveLimit * .2)));
     const board = byId("coordinateBoard");
     board.style.setProperty("--coordinate-size", String(coordinate.size));
     board.replaceChildren();
@@ -3900,25 +3936,31 @@ function moveCoordinate(direction) {
     const [dx, dy] = delta[direction] ?? [0, 0];
     const nx = coordinate.x + dx;
     const ny = coordinate.y + dy;
-    coordinate.stageMoves += 1;
+    const positionKey = nx + "," + ny;
     coordinate.moves += 1;
     if (nx < 0 || ny < 0 || nx >= coordinate.size || ny >= coordinate.size || coordinate.obstacles.has(nx + "," + ny)) {
-        coordinate.score = Math.max(0, coordinate.score - 5);
+        coordinate.stageMoves += 2;
+        coordinate.score = Math.max(0, coordinate.score - 10);
         wrongSound();
-        showToast("장애물이에요. 이동 에너지 1을 사용했어요.");
+        showToast("데이터 벽 충돌! 이동 에너지 2칸을 잃었어요.");
         if (coordinate.stageMoves >= coordinate.moveLimit)
             resetCoordinateStage();
         else
             renderCoordinate();
         return;
     }
+    const revisiting = coordinate.visited.has(positionKey);
+    coordinate.stageMoves += revisiting ? 2 : 1;
+    if (revisiting) {
+        coordinate.score = Math.max(0, coordinate.score - 5);
+        showToast("이미 조사한 좌표예요. 에너지 2칸을 사용했어요.");
+    }
     coordinate.x = nx;
     coordinate.y = ny;
     coordinate.visited.add(nx + "," + ny);
     moveSound();
-    const positionKey = nx + "," + ny;
     if (coordinate.dataCells.delete(positionKey)) {
-        coordinate.score += 50;
+        coordinate.score += 60;
         correctSound();
         showToast("데이터 칩 획득! 출구 잠금이 약해졌어요.");
     }
