@@ -58,18 +58,25 @@ const POKEMON = [
     { id: 403, name: "꼬링크" }, { id: 653, name: "푸호꼬" }, { id: 704, name: "미끄메라" },
     { id: 677, name: "냐스퍼" }, { id: 674, name: "판짱" }, { id: 656, name: "개구마르" },
     { id: 447, name: "리오르" }, { id: 570, name: "조로아" }, { id: 885, name: "드라꼰" },
-    { id: 821, name: "파라꼬" }, { id: 328, name: "톱치" }, { id: 246, name: "애버라스" },
+    { id: 821, name: "파라꼬" }, { id: 328, name: "톱치" }, { id: 27, name: "모래두지" },
     { id: 280, name: "랄토스" }, { id: 607, name: "불켜미" }, { id: 679, name: "단칼빙" },
     { id: 744, name: "암멍이" }, { id: 255, name: "아차모" }, { id: 252, name: "나무지기" },
     { id: 258, name: "물짱이" }, { id: 446, name: "먹고자" }, { id: 417, name: "파치리스" },
-    { id: 399, name: "비버니" }, { id: 175, name: "토게피" }, { id: 251, name: "세레비" },
+    { id: 399, name: "비버니" }, { id: 29, name: "니드런♀" }, { id: 90, name: "셀러" },
     { id: 58, name: "가디" }, { id: 35, name: "삐삐" }, { id: 95, name: "롱스톤" },
     { id: 142, name: "프테라" }, { id: 113, name: "럭키" }, { id: 115, name: "캥카" },
     { id: 125, name: "에레브" }, { id: 126, name: "마그마" }, { id: 50, name: "디그다" },
     { id: 128, name: "켄타로" }, { id: 66, name: "알통몬" }, { id: 74, name: "꼬마돌" },
     { id: 120, name: "별가사리" }, { id: 116, name: "쏘드라" }, { id: 111, name: "뿔카노" },
     { id: 100, name: "찌리리공" }, { id: 138, name: "암나이트" }, { id: 140, name: "투구" },
-    { id: 43, name: "뚜벅쵸" }, { id: 60, name: "발챙이" }
+    { id: 43, name: "뚜벅쵸" }, { id: 60, name: "발챙이" },
+    { id: 6, name: "리자몽" }, { id: 94, name: "팬텀" }, { id: 149, name: "망나뇽" },
+    { id: 9, name: "거북왕" }, { id: 3, name: "이상해꽃" }, { id: 130, name: "갸라도스" },
+    { id: 59, name: "윈디" }, { id: 26, name: "라이츄" }, { id: 65, name: "후딘" },
+    { id: 134, name: "샤미드" }, { id: 135, name: "쥬피썬더" }, { id: 136, name: "부스터" },
+    { id: 38, name: "나인테일" }, { id: 68, name: "괴력몬" }, { id: 34, name: "니드킹" },
+    { id: 36, name: "픽시" }, { id: 40, name: "푸크린" }, { id: 80, name: "야도란" },
+    { id: 121, name: "아쿠스타" }, { id: 78, name: "날쌩마" }
 ];
 const MODE_MASCOTS = {
     quiz: 25, rain: 129, mole: 50, memory: 132, ox: 54, balloon: 39, space: 722, mine: 100, knowledge: 151,
@@ -587,6 +594,70 @@ function wrongSound() {
         [220, 0.21, 0.085, 0.014],
     ]);
 }
+function choiceMistakeCount(containerId) {
+    return Number(byId(containerId).dataset.choiceMistakes ?? "0");
+}
+function resetChoicePenalty(containerId) {
+    const container = byId(containerId);
+    delete container.dataset.choiceMistakes;
+    container.classList.remove("choice-penalty-lock");
+}
+function showMistakeEncounter(attempt) {
+    document.querySelector(".mistake-encounter")?.remove();
+    const encounter = document.createElement("aside");
+    encounter.className = "mistake-encounter " + (attempt === 1 ? "gastly-encounter" : "final-encounter");
+    encounter.setAttribute("role", "status");
+    encounter.setAttribute("aria-live", "assertive");
+    const copy = document.createElement("div");
+    const title = document.createElement("strong");
+    const message = document.createElement("span");
+    if (attempt === 1) {
+        title.textContent = "고오스의 방해!";
+        message.textContent = "잠깐 멈추고 다시 생각해 봐요.";
+        encounter.append(pokemonMedia(pokemonById(92), "mistake-character"));
+        playPokemonCry(92, .12);
+    }
+    else if (Math.random() < .5) {
+        title.textContent = "팬텀이 정답을 공개했어요";
+        message.textContent = "설명을 읽고 다음 문제에 도전해요.";
+        encounter.append(pokemonMedia(pokemonById(94), "mistake-character"));
+        playPokemonCry(94, .13);
+    }
+    else {
+        title.textContent = "로켓단이 콤보를 가져갔어요";
+        message.textContent = "정답을 확인하고 다시 출발해요.";
+        encounter.append(trainerMedia("jessiejames-gen1.png", "로켓단", "mistake-character"));
+    }
+    copy.append(title, message);
+    encounter.append(copy);
+    document.body.append(encounter);
+    window.setTimeout(() => encounter.remove(), attempt === 1 ? 1200 : 1900);
+}
+function applyChoicePenalty(containerId, selector, selected, correctButton, feedback, firstMessage, finalMessage) {
+    const container = byId(containerId);
+    const attempt = choiceMistakeCount(containerId) + 1;
+    container.dataset.choiceMistakes = String(attempt);
+    container.classList.add("choice-penalty-lock");
+    const buttons = Array.from(container.querySelectorAll(selector));
+    buttons.forEach((button) => { button.disabled = true; });
+    selected.classList.add("wrong");
+    wrongSound();
+    showMistakeEncounter(attempt);
+    if (attempt === 1) {
+        feedback.textContent = firstMessage;
+        window.setTimeout(() => {
+            if (!container.isConnected)
+                return;
+            container.classList.remove("choice-penalty-lock");
+            buttons.forEach((button) => { if (button !== selected)
+                button.disabled = false; });
+        }, 1100);
+        return true;
+    }
+    correctButton?.classList.add("correct");
+    feedback.textContent = finalMessage;
+    return false;
+}
 function startMusic() {
     if (!musicEnabled || musicTimer !== null)
         return;
@@ -639,10 +710,15 @@ function updateSideInfo() {
     const records = readRecords();
     const progress = getTrainerProgress();
     const stars = progress.stars;
+    const trainerName = getName() || "친구";
     document.body.dataset.trainerTier = progress.current.tier;
-    byId("sideName").textContent = getName() || "친구";
-    byId("sideStars").textContent = "별 " + stars + "개";
+    byId("sideName").textContent = trainerName;
+    byId("sideLevel").textContent = "Lv." + progress.current.level;
+    byId("sideTitle").textContent = progress.current.title;
+    byId("sideStars").textContent = progress.next ? "별 " + stars + "개 · 다음 레벨까지 " + progress.remaining + "개" : "별 " + stars + "개 · 최고 레벨 달성";
     replaceWithPokemon(byId("sideMascot"), getAvatarId());
+    replaceWithTrainer(byId("sideTrainer"), "ash.png", "지우");
+    byId("playerCard").setAttribute("aria-label", trainerName + " · 레벨 " + progress.current.level + " " + progress.current.title + " · 아바타 바꾸기");
     const card = byId("levelCard");
     card.replaceChildren();
     const title = document.createElement("strong");
@@ -1066,7 +1142,7 @@ async function loadPokedexDetail(pokemon, selected) {
         const description = document.createElement("p");
         description.className = "pokedex-description";
         description.textContent = flavor;
-        detail.append(typeArtwork, image, heading, facts, description);
+        detail.append(typeArtwork, image, heading, description, facts);
     }
     catch {
         detail.replaceChildren();
@@ -1371,6 +1447,7 @@ function nextQuizQuestion() {
     byId("quizStreak").textContent = quiz.streak >= 2 ? quiz.streak + "연속 정답!" : "";
     renderQuizDots();
     const controls = byId("quizControls");
+    resetChoicePenalty("quizControls");
     controls.replaceChildren();
     if (quiz.choiceMode) {
         const list = document.createElement("div");
@@ -1415,12 +1492,25 @@ function renderQuizCharge() {
 function answerQuiz(value, selected) {
     if (!quiz || quiz.locked || !quiz.current)
         return;
-    quiz.locked = true;
     const correct = value === quiz.current.answer;
     const answer = byId("quizAnswer");
+    const mistakes = selected ? choiceMistakeCount("quizControls") : 0;
+    if (!correct && selected) {
+        quiz.streak = 0;
+        renderQuizCharge();
+        const buttons = Array.from(byId("quizControls").querySelectorAll(".choice-button"));
+        const correctButton = buttons.find((button) => Number(button.textContent) === quiz?.current?.answer);
+        const retry = applyChoicePenalty("quizControls", ".choice-button", selected, correctButton, byId("quizFeedback"), "고오스가 콤보를 끊었어요. 잠깐 생각하고 한 번 더 골라요!", "두 번 틀렸어요. 정답을 확인하고 다음 문제로 이동해요.");
+        answer.classList.add("wrong");
+        answer.textContent = String(value);
+        if (retry)
+            return;
+    }
+    quiz.locked = true;
     if (correct) {
         const seconds = (Date.now() - quiz.questionStarted) / 1000;
-        const gained = 100 + (seconds < 7 ? 30 : 0) + quiz.streak * 10;
+        const baseScore = 100 + (seconds < 7 ? 30 : 0) + quiz.streak * 10;
+        const gained = mistakes ? Math.round(baseScore * .5) : baseScore;
         quiz.score += gained;
         quiz.correct += 1;
         quiz.streak += 1;
@@ -1434,7 +1524,7 @@ function answerQuiz(value, selected) {
         quiz.results[quiz.index] = "c";
         answer.classList.add("correct");
         answer.textContent = String(value);
-        byId("quizFeedback").textContent = "정답이에요! +" + gained;
+        byId("quizFeedback").textContent = mistakes ? "재도전 성공! 절반 점수 +" + gained : "정답이에요! +" + gained;
         if (selected)
             selected.classList.add("correct");
         correctSound();
@@ -1447,7 +1537,8 @@ function answerQuiz(value, selected) {
         byId("quizFeedback").textContent = "정답은 " + quiz.current.answer + "예요.";
         if (selected)
             selected.classList.add("wrong");
-        wrongSound();
+        if (!selected)
+            wrongSound();
     }
     renderQuizDots();
     window.setTimeout(() => {
@@ -1480,20 +1571,41 @@ function stopRain() {
     rain.running = false;
     if (rain.raf)
         cancelAnimationFrame(rain.raf);
+    if (rain.watchdog)
+        window.clearInterval(rain.watchdog);
 }
 function startRain() {
     const config = RAIN_CONFIG[state.diff];
     rain = {
         running: true, finished: false, hp: 5, score: 0, popped: 0, input: "", drops: [],
         speed: config.speed, gap: config.gap, maxDrops: config.max, started: performance.now(),
-        lastFrame: performance.now(), lastSpawn: performance.now() - config.gap, raf: 0, wave: 1
+        lastFrame: performance.now(), lastSpawn: performance.now(), raf: 0, watchdog: 0, wave: 1
     };
     byId("rainField").querySelectorAll(".rain-drop").forEach((drop) => drop.remove());
     const rainPad = keypad(rainNumber, rainDelete, rainSubmit);
     byId("rainKeypad").replaceChildren(...Array.from(rainPad.childNodes));
     renderRainHud();
     showScreen("rain");
+    byId("rainSceneIntro").classList.add("show");
+    window.setTimeout(() => byId("rainSceneIntro").classList.remove("show"), 1600);
+    spawnRainDrop();
+    rain.lastSpawn = performance.now();
     rain.raf = requestAnimationFrame(rainFrame);
+    rain.watchdog = window.setInterval(() => {
+        if (!rain?.running || document.hidden)
+            return;
+        const now = performance.now();
+        if (rain.drops.length === 0 && now - rain.lastSpawn >= 1200) {
+            spawnRainDrop();
+            rain.lastSpawn = now;
+        }
+        if (now - rain.lastFrame >= 1800) {
+            if (rain.raf)
+                cancelAnimationFrame(rain.raf);
+            rain.lastFrame = now;
+            rain.raf = requestAnimationFrame(rainFrame);
+        }
+    }, 750);
 }
 function rainFrame(now) {
     if (!rain || !rain.running)
@@ -1511,7 +1623,8 @@ function rainFrame(now) {
     rain.wave = 1 + Math.floor(elapsed / 120);
     const multiplier = Math.min(2.2, 1 + elapsed * .012 + rain.popped * .004);
     const currentGap = Math.max(1300, phaseConfig.gap / (1 + elapsed * .004));
-    if (now - rain.lastSpawn >= currentGap && rain.drops.length < phaseConfig.max) {
+    const emptyFieldNeedsDrop = rain.drops.length === 0 && now - rain.lastSpawn >= 900;
+    if ((emptyFieldNeedsDrop || now - rain.lastSpawn >= currentGap) && rain.drops.length < phaseConfig.max) {
         spawnRainDrop();
         rain.lastSpawn = now;
     }
@@ -1625,7 +1738,23 @@ function finishRain() {
     const seconds = Math.floor((performance.now() - game.started) / 1000);
     const stars = game.popped >= 18 ? 3 : game.popped >= 10 ? 2 : game.popped >= 4 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "rain", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.popped + "개 · " + seconds + "초", timestamp: Date.now() });
+    showRainFinishScene(game.popped);
     showResult(stars, "잉어킹 산성비 챌린지 완료", game.popped + "개의 문제를 막았어요.", [[String(game.score), "점수"], [String(game.popped), "해결"], [seconds + "초", "생존"], [String(game.wave), "단계"]]);
+}
+function showRainFinishScene(popped) {
+    document.querySelector(".rain-finish-scene")?.remove();
+    const scene = document.createElement("div");
+    scene.className = "rain-finish-scene";
+    const copy = document.createElement("div");
+    copy.className = "rain-finish-copy";
+    const label = document.createElement("span");
+    label.textContent = "RAIN RESCUE · COMPLETE";
+    const title = document.createElement("strong");
+    title.textContent = "수식 " + popped + "개로 도시를 지켰어요!";
+    copy.append(label, title);
+    scene.append(copy);
+    document.body.append(scene);
+    window.setTimeout(() => scene.remove(), 1800);
 }
 let mole = null;
 const MOLE_CONFIG = {
@@ -1832,7 +1961,8 @@ function finishMole() {
 }
 let memory = null;
 let memorySession = 0;
-const MEMORY_POKEMON_IDS = [25, 133, 4, 7, 1, 151, 143, 37, 54, 129, 131, 132, 39, 52, 79, 92, 147];
+const MEMORY_POKEMON_IDS = [25, 133, 4, 7, 1, 151, 143, 37, 54, 129, 131, 132, 39, 52, 79, 92, 147, 94, 6, 9, 3, 130, 59, 26, 65, 134, 135, 136];
+const MEMORY_TOTAL_PAIRS = 28;
 function stopMemory() {
     memorySession += 1;
     if (!memory)
@@ -1860,7 +1990,7 @@ function memoryDelay(callback, delay) {
 function startMemory() {
     const session = ++memorySession;
     const pool = shuffle(MEMORY_POKEMON_IDS.map((id) => pokemonById(id)));
-    memory = { running: true, session, cards: [], first: null, locked: false, moves: 0, matched: 0, totalMatched: 0, pairs: 3, round: 0, score: 0, combo: 0, bestCombo: 0, started: performance.now(), pool, timeouts: new Set(), countdown: null };
+    memory = { running: true, session, cards: [], first: null, locked: false, moves: 0, matched: 0, totalMatched: 0, pairs: 4, round: 0, score: 0, combo: 0, bestCombo: 0, mistakes: 0, started: performance.now(), pool, timeouts: new Set(), countdown: null };
     replaceWithPokemon(byId("memoryMascot"), 132);
     buildMemoryRound(0);
     renderMemoryHud();
@@ -1877,9 +2007,10 @@ function buildMemoryRound(round) {
     if (!memory?.running)
         return;
     const configs = [
-        { pairs: 3, columns: 3, difficulty: "easy", offset: 0 },
-        { pairs: 6, columns: 4, difficulty: "normal", offset: 3 },
-        { pairs: 8, columns: 4, difficulty: "hard", offset: 9 }
+        { pairs: 4, columns: 4, difficulty: "easy", offset: 0 },
+        { pairs: 6, columns: 4, difficulty: "normal", offset: 4 },
+        { pairs: 8, columns: 4, difficulty: "hard", offset: 10 },
+        { pairs: 10, columns: 5, difficulty: "hard", offset: 18 }
     ];
     const config = configs[round];
     memory.round = round;
@@ -1897,6 +2028,7 @@ function buildMemoryRound(round) {
         rawCards.push({ key: index, pokemon });
     });
     const grid = byId("memoryGrid");
+    grid.dataset.columns = String(config.columns);
     grid.style.gridTemplateColumns = "repeat(" + config.columns + ",1fr)";
     grid.replaceChildren();
     shuffle(rawCards).forEach((card, index) => {
@@ -1972,7 +2104,7 @@ function flipMemoryCard(index) {
             playPokemonCry(132, .15);
         renderMemoryHud();
         if (memory.matched >= memory.pairs) {
-            if (memory.round < 2)
+            if (memory.round < 3)
                 memoryDelay(() => buildMemoryRound((memory?.round ?? 0) + 1), 650);
             else
                 memoryDelay(finishMemory, 500);
@@ -1981,10 +2113,20 @@ function flipMemoryCard(index) {
     else {
         memory.locked = true;
         memory.combo = 0;
-        byId("memoryStatus").textContent = "서로 다른 변신이에요. 두 카드의 위치를 기억해요!";
+        memory.mistakes += 1;
+        const remainingChances = Math.max(0, 3 - memory.mistakes);
+        byId("memoryStatus").textContent = remainingChances ? `서로 다른 변신이에요. 남은 기회 ${remainingChances}번!` : "변신 에너지가 모두 소진됐어요!";
         first.element.classList.add("mismatch");
         card.element.classList.add("mismatch");
         wrongSound();
+        if (memory.mistakes >= 3) {
+            byId("screen-memory").classList.add("memory-game-over");
+            playPokemonCry(94, .18);
+            showMistakeEncounter(2);
+            renderMemoryHud();
+            memoryDelay(() => finishMemory(false, true), 1500);
+            return;
+        }
         memoryDelay(() => {
             first.element.classList.remove("mismatch");
             card.element.classList.remove("mismatch");
@@ -2004,24 +2146,28 @@ function renderMemoryHud() {
     byId("memoryScore").textContent = String(memory.score);
     byId("memoryMoves").textContent = String(memory.moves);
     byId("memoryMatched").textContent = String(memory.totalMatched);
-    byId("memoryTotal").textContent = "17";
+    byId("memoryTotal").textContent = String(MEMORY_TOTAL_PAIRS);
     byId("memoryCombo").textContent = String(memory.combo);
-    byId("memoryTransformBar").style.width = `${memory.totalMatched / 17 * 100}%`;
-    byId("memoryTransformText").textContent = `${memory.totalMatched} / 17`;
+    byId("memoryLives").textContent = "❤️".repeat(Math.max(0, 3 - memory.mistakes)) + "🖤".repeat(Math.min(3, memory.mistakes));
+    byId("memoryTransformBar").style.width = `${memory.totalMatched / MEMORY_TOTAL_PAIRS * 100}%`;
+    byId("memoryTransformText").textContent = `${memory.totalMatched} / ${MEMORY_TOTAL_PAIRS}`;
     const remaining = Math.max(0, MAX_GAME_SECONDS - Math.floor((performance.now() - memory.started) / 1000));
     byId("memoryTime").textContent = Math.floor(remaining / 60) + ":" + String(remaining % 60).padStart(2, "0");
 }
-function finishMemory(timedOut = false) {
+function finishMemory(timedOut = false, failed = false) {
     if (!memory?.running || state.grade === null)
         return;
     const game = memory;
     const seconds = Math.floor((performance.now() - game.started) / 1000);
-    const ratio = game.pairs / Math.max(1, game.moves);
-    const completion = game.totalMatched / 17;
-    const stars = timedOut ? (completion >= .75 ? 2 : completion >= .4 ? 1 : 0) : ratio >= .7 ? 3 : ratio >= .5 ? 2 : ratio >= .34 ? 1 : 0;
+    const ratio = game.totalMatched / Math.max(1, game.moves);
+    const completion = game.totalMatched / MEMORY_TOTAL_PAIRS;
+    const stars = failed ? (completion >= .5 ? 1 : 0) : timedOut ? (completion >= .75 ? 2 : completion >= .4 ? 1 : 0) : ratio >= .7 ? 3 : ratio >= .5 ? 2 : ratio >= .34 ? 1 : 0;
     stopMemory();
-    saveRecord({ name: getName() || "친구", mode: "memory", grade: state.grade, diff: state.diff, score: game.score + stars * 100, stars, detail: game.totalMatched + "/17쌍 · " + game.moves + "번", timestamp: Date.now() });
-    showResult(stars, timedOut ? "메타몽 변신 도전 완료" : "메타몽 메모리 완성!", timedOut ? game.totalMatched + "쌍의 변신을 찾았어요." : "메타몽의 포켓몬 변신 17쌍을 모두 찾았어요!", [[String(game.score + stars * 100), "점수"], [String(game.moves), "뒤집기"], [String(game.bestCombo), "최고 연속"], [game.totalMatched + "/17", "변신 완성"]]);
+    byId("screen-memory").classList.remove("memory-game-over");
+    saveRecord({ name: getName() || "친구", mode: "memory", grade: state.grade, diff: state.diff, score: game.score + stars * 100, stars, detail: game.totalMatched + "/" + MEMORY_TOTAL_PAIRS + "쌍 · 오답 " + game.mistakes + "회", timestamp: Date.now() });
+    const title = failed ? "메타몽 변신 에너지 소진" : timedOut ? "메타몽 변신 도전 완료" : "메타몽 메모리 완성!";
+    const message = failed ? "오답이 3번 누적되어 탐험을 마쳤어요. 카드 위치를 기억하고 다시 도전해요." : timedOut ? game.totalMatched + "쌍의 변신을 찾았어요." : "메타몽의 포켓몬 변신 " + MEMORY_TOTAL_PAIRS + "쌍을 모두 찾았어요!";
+    showResult(stars, title, message, [[String(game.score + stars * 100), "점수"], [String(game.mistakes) + "/3", "오답"], [String(game.bestCombo), "최고 연속"], [game.totalMatched + "/" + MEMORY_TOTAL_PAIRS, "변신 완성"]]);
 }
 let ox = null;
 function stopOx() {
@@ -2051,6 +2197,7 @@ function startOx() {
 function nextOx() {
     if (!ox?.running)
         return;
+    resetChoicePenalty("screen-ox");
     const problem = newProblem(difficultyForElapsed(performance.now() - (60 - ox.time) * 1000, 60));
     const truth = Math.random() < .5;
     let shown = problem.answer;
@@ -2087,10 +2234,12 @@ function renderOxBoost() {
 function answerOx(answer) {
     if (!ox?.running || ox.nextTimer !== null)
         return;
+    const mistakes = choiceMistakeCount("screen-ox");
     if (answer === ox.current.truth) {
         ox.combo += 1;
         const boost = ox.combo % 5 === 0;
-        ox.score += 100 + (ox.combo - 1) * 10 + (boost ? 250 : 0);
+        const gained = mistakes ? 50 : 100 + (ox.combo - 1) * 10 + (boost ? 250 : 0);
+        ox.score += gained;
         ox.best = Math.max(ox.best, ox.combo);
         ox.correct += 1;
         reactOx(true);
@@ -2101,13 +2250,21 @@ function answerOx(answer) {
             playPokemonCry(54);
         }
         correctSound();
+        if (mistakes)
+            byId("oxReaction").textContent = "재도전 성공! 판단 점수 +50";
     }
     else {
         ox.combo = 0;
         renderOxBoost();
-        ox.time = Math.max(0, ox.time - 3);
         reactOx(false);
-        wrongSound();
+        const buttons = Array.from(byId("screen-ox").querySelectorAll(".ox-button"));
+        const correctButton = buttons.find((button) => button.classList.contains(ox?.current.truth ? "yes" : "no"));
+        const selected = buttons.find((button) => button.classList.contains(answer ? "yes" : "no"));
+        if (selected && applyChoicePenalty("screen-ox", ".ox-button", selected, correctButton, byId("oxReaction"), "고오스의 방해! 1초 동안 식을 다시 계산해 봐요.", "두 번 틀렸어요. 빛나는 버튼이 정답이에요.")) {
+            renderOxHud();
+            return;
+        }
+        ox.time = Math.max(0, ox.time - 3);
         if (ox.time <= 0) {
             renderOxHud();
             finishOx();
@@ -2892,6 +3049,7 @@ function nextSpaceQuestion() {
     byId("spaceTarget").replaceChildren(space.current.target);
     byId("spaceFeedback").textContent = "";
     const choices = byId("spaceChoices");
+    resetChoicePenalty("spaceChoices");
     choices.replaceChildren();
     space.current.choices.forEach((choice, index) => {
         const button = document.createElement("button");
@@ -2907,25 +3065,31 @@ function nextSpaceQuestion() {
 function answerSpace(correct, selected) {
     if (!space?.running || space.locked || !space.current)
         return;
+    const mistakes = choiceMistakeCount("spaceChoices");
+    if (!correct) {
+        space.streak = 0;
+        const buttons = Array.from(byId("spaceChoices").querySelectorAll(".space-choice"));
+        const answerIndex = space.current.choices.findIndex((choice) => choice.correct);
+        const retry = applyChoicePenalty("spaceChoices", ".space-choice", selected, buttons[answerIndex], byId("spaceFeedback"), "고오스가 시야를 흐렸어요. 관찰 팁을 읽고 다시 골라요!", "두 번 틀렸어요. 빛나는 정답 모양을 천천히 비교해 보세요.");
+        renderSpaceHud();
+        if (retry)
+            return;
+    }
     space.locked = true;
     if (correct) {
-        const gained = 100 + space.streak * 15;
+        const baseScore = 100 + space.streak * 15;
+        const gained = mistakes ? Math.round(baseScore * .5) : baseScore;
         space.score += gained;
         space.correct += 1;
         space.streak += 1;
         space.best = Math.max(space.best, space.streak);
         selected.classList.add("correct");
-        byId("spaceFeedback").textContent = "정확해요! 공간을 잘 떠올렸어요. +" + gained;
+        byId("spaceFeedback").textContent = mistakes ? "재도전 성공! 관찰 점수 +" + gained : "정확해요! 공간을 잘 떠올렸어요. +" + gained;
         correctSound();
     }
     else {
         space.streak = 0;
         selected.classList.add("wrong");
-        const buttons = Array.from(byId("spaceChoices").querySelectorAll(".space-choice"));
-        const answerIndex = space.current.choices.findIndex((choice) => choice.correct);
-        buttons[answerIndex]?.classList.add("correct");
-        byId("spaceFeedback").textContent = "정답 모양을 천천히 돌려서 비교해 보세요.";
-        wrongSound();
     }
     renderSpaceHud();
     space.nextTimer = window.setTimeout(() => {
@@ -2964,6 +3128,8 @@ function stopSnack() {
     if (!snack)
         return;
     snack.running = false;
+    if (snack.startTimer !== null)
+        window.clearTimeout(snack.startTimer);
     if (snack.raf !== null)
         cancelAnimationFrame(snack.raf);
     if (snack.spawnTimer !== null)
@@ -2974,18 +3140,41 @@ function stopSnack() {
     snack.items = [];
 }
 function startSnack() {
-    snack = { running: true, score: 0, combo: 0, best: 0, time: 60, lives: 3, x: 50, items: [], raf: null, spawnTimer: null, countdown: null, lastFrame: performance.now(), caught: 0, goldCaught: 0 };
+    snack = { running: true, score: 0, combo: 0, best: 0, time: 60, lives: 3, x: 50, items: [], raf: null, spawnTimer: null, countdown: null, startTimer: null, lastFrame: performance.now(), caught: 0, goldCaught: 0 };
     byId("snackPlayer").replaceChildren(pokemonMedia({ id: 143, name: "잠만보" }));
     byId("snackField").classList.remove("fever");
+    byId("snackSceneIntro").classList.add("show");
     showScreen("snack");
     renderSnackHud();
     positionSnackPlayer();
-    spawnSnackItem();
-    snack.spawnTimer = window.setInterval(spawnSnackItem, 680);
-    snack.countdown = window.setInterval(() => { if (!snack?.running)
-        return; snack.time = Math.max(0, snack.time - 1); renderSnackHud(); if (snack.time <= 0)
-        finishSnack(); }, 1000);
-    snack.raf = requestAnimationFrame(snackFrame);
+    snack.startTimer = window.setTimeout(() => {
+        if (!snack?.running)
+            return;
+        snack.startTimer = null;
+        byId("snackSceneIntro").classList.remove("show");
+        snack.lastFrame = performance.now();
+        spawnSnackItem();
+        snack.spawnTimer = window.setInterval(spawnSnackItem, 680);
+        snack.countdown = window.setInterval(() => { if (!snack?.running)
+            return; snack.time = Math.max(0, snack.time - 1); renderSnackHud(); if (snack.time <= 0)
+            finishSnack(); }, 1000);
+        snack.raf = requestAnimationFrame(snackFrame);
+    }, 1600);
+}
+function showSnackFinishScene(outOfLives, caught) {
+    document.querySelector(".snack-finish-scene")?.remove();
+    const scene = document.createElement("div");
+    scene.className = "snack-finish-scene";
+    const copy = document.createElement("div");
+    copy.className = "snack-finish-copy";
+    const label = document.createElement("span");
+    label.textContent = outOfLives ? "BERRY HILL · TRY AGAIN" : "BERRY HILL · COMPLETE";
+    const title = document.createElement("strong");
+    title.textContent = outOfLives ? "잠만보가 다시 기다리고 있어요!" : "열매 " + caught + "개를 받았어요!";
+    copy.append(label, title);
+    scene.append(copy);
+    document.body.append(scene);
+    window.setTimeout(() => scene.remove(), 1800);
 }
 function spawnSnackItem() {
     if (!snack?.running)
@@ -3097,6 +3286,7 @@ function finishSnack(outOfLives = false) {
     const game = snack;
     stopSnack();
     const stars = game.score >= 3200 ? 3 : game.score >= 1900 ? 2 : game.score >= 700 ? 1 : 0;
+    showSnackFinishScene(outOfLives, game.caught);
     saveRecord({ name: getName() || "친구", mode: "snack", grade: state.grade, diff: "easy", score: game.score, stars, detail: game.caught + "개 열매", timestamp: Date.now() });
     showResult(stars, outOfLives ? "잠만보 휴식 시간" : "베리 대모험 완료!", "잠만보가 아이템 " + game.caught + "개를 맛있게 받았어요.", [[String(game.score), "점수"], [String(game.caught), "획득"], [String(game.goldCaught), "이상한사탕"], [String(game.best), "최고 연속"]]);
 }
@@ -3387,17 +3577,19 @@ function chooseHistoryEvent(event, button) {
     const earliest = Math.min(...Array.from(historyGame.remaining));
     const feedback = byId("historyFeedback");
     if (event.year === earliest) {
+        const retried = choiceMistakeCount("historyCards") > 0;
+        resetChoicePenalty("historyCards");
         historyGame.remaining.delete(event.year);
         historyGame.streak += 1;
         historyGame.bestStreak = Math.max(historyGame.bestStreak, historyGame.streak);
         historyGame.lastWrongYear = null;
-        const bonus = Math.min(100, (historyGame.streak - 1) * 20);
-        historyGame.score += 140 + bonus;
+        const bonus = retried ? 0 : Math.min(100, (historyGame.streak - 1) * 20);
+        historyGame.score += retried ? 70 : 140 + bonus;
         button.classList.add("correct");
         correctSound();
         pokemonSparkBurst(10);
         feedback.dataset.status = "correct";
-        feedback.textContent = event.yearLabel + " · 시간 물결 연결!" + (bonus ? " 연속 보너스 +" + bonus : "");
+        feedback.textContent = event.yearLabel + (retried ? " · 재도전으로 시간 물결 연결! +70" : " · 시간 물결 연결!" + (bonus ? " 연속 보너스 +" + bonus : ""));
         if (!historyGame.remaining.size) {
             window.setTimeout(finishHistory, 700);
             return;
@@ -3407,11 +3599,21 @@ function chooseHistoryEvent(event, button) {
         historyGame.mistakes += 1;
         historyGame.streak = 0;
         historyGame.lastWrongYear = event.year;
-        button.classList.add("wrong");
-        wrongSound();
         feedback.dataset.status = "wrong";
         const earliestEvent = historyGame.events.find((item) => item.year === earliest);
-        feedback.textContent = "조금 더 과거로 가야 해요. 단서: " + (earliestEvent?.yearLabel ?? "더 오래된 시대");
+        const buttons = Array.from(byId("historyCards").querySelectorAll(".history-card"));
+        const answerButton = buttons.find((item) => item.textContent?.includes(earliestEvent?.label ?? "__none__"));
+        const retry = applyChoicePenalty("historyCards", ".history-card", button, answerButton, feedback, "고오스가 시간의 길을 가렸어요. 더 오래된 사건을 한 번 더 찾아봐요!", "두 번 틀렸어요. 가장 오래된 사건을 빛으로 표시했어요.");
+        byId("historyMistakes").textContent = String(historyGame.mistakes);
+        byId("historyStreak").textContent = "0";
+        if (retry)
+            return;
+        window.setTimeout(() => { if (!historyGame?.running)
+            return; historyGame.remaining.delete(earliest); historyGame.lastWrongYear = null; resetChoicePenalty("historyCards"); if (!historyGame.remaining.size)
+            finishHistory();
+        else
+            renderHistory(); }, 1700);
+        return;
     }
     renderHistory();
 }
@@ -3477,6 +3679,7 @@ function nextSafety() {
     renderSafetyShield();
     const indexed = shuffle(question.choices.map((label, index) => ({ label, correct: index === question.answer })));
     const choices = byId("safetyChoices");
+    resetChoicePenalty("safetyChoices");
     choices.replaceChildren();
     indexed.forEach((item, index) => { const button = document.createElement("button"); button.type = "button"; button.className = "safety-choice"; button.textContent = item.label; button.addEventListener("click", () => answerSafety(item.correct, button, indexed)); choices.append(button); });
 }
@@ -3508,17 +3711,33 @@ function renderSafetyShield() {
 function answerSafety(correct, selected, indexed) {
     if (!safety?.running || safety.locked)
         return;
-    safety.locked = true;
     const question = safety.questions[safety.index];
-    Array.from(byId("safetyChoices").querySelectorAll("button")).forEach((button, index) => { button.disabled = true; if (indexed[index]?.correct)
+    const mistakes = choiceMistakeCount("safetyChoices");
+    const buttons = Array.from(byId("safetyChoices").querySelectorAll("button"));
+    if (!correct) {
+        safety.streak = 0;
+        byId("screen-safety").classList.add("rescue-alert");
+        const answerIndex = indexed.findIndex((item) => item.correct);
+        const retry = applyChoicePenalty("safetyChoices", ".safety-choice", selected, buttons[answerIndex], byId("safetyReaction"), "고오스가 위험 표지판을 가렸어요. 안전 원칙을 떠올리고 다시 골라요!", "두 번 틀렸어요. 빛나는 안전 행동과 설명을 확인해요.");
+        byId("safetyStreak").textContent = "0";
+        if (retry) {
+            safety.locked = true;
+            window.setTimeout(() => { if (safety?.running)
+                safety.locked = false; }, 1100);
+            return;
+        }
+    }
+    safety.locked = true;
+    buttons.forEach((button, index) => { button.disabled = true; if (indexed[index]?.correct)
         button.classList.add("correct"); });
     if (correct) {
         safety.correct += 1;
         safety.streak += 1;
-        const patrolBonus = safety.streak % 3 === 0;
-        safety.score += 120 + safety.streak * 10 + (patrolBonus ? 100 : 0);
+        const patrolBonus = !mistakes && safety.streak % 3 === 0;
+        const gained = mistakes ? 65 : 120 + safety.streak * 10 + (patrolBonus ? 100 : 0);
+        safety.score += gained;
         selected.classList.add("correct");
-        byId("safetyReaction").textContent = patrolBonus ? "꼬부기 구조 보너스! 3연속 안전 선택 +100" : "안전 선택 성공! 꼬부기가 힘차게 물방울 방패를 채웠어요.";
+        byId("safetyReaction").textContent = mistakes ? "재도전 성공! 안전 점수 +65" : patrolBonus ? "꼬부기 구조 보너스! 3연속 안전 선택 +100" : "안전 선택 성공! 꼬부기가 힘차게 물방울 방패를 채웠어요.";
         byId("screen-safety").classList.add("rescue-success");
         if (patrolBonus) {
             pokemonSparkBurst(7);
@@ -3527,11 +3746,7 @@ function answerSafety(correct, selected, indexed) {
         correctSound();
     }
     else {
-        safety.streak = 0;
         selected.classList.add("wrong");
-        byId("safetyReaction").textContent = "꼬부기가 위험 신호를 발견했어요. 설명을 보고 안전 행동을 기억해요.";
-        byId("screen-safety").classList.add("rescue-alert");
-        wrongSound();
     }
     byId("safetyExplanation").textContent = question.explanation;
     byId("safetyScore").textContent = String(safety.score);
@@ -3636,6 +3851,7 @@ function nextKnowledgeQuestion() {
     byId("knowledgeQuestion").textContent = question.prompt;
     byId("knowledgeExplanation").replaceChildren();
     const choices = byId("knowledgeChoices");
+    resetChoicePenalty("knowledgeChoices");
     choices.replaceChildren();
     question.choices.forEach((label, index) => {
         const button = document.createElement("button");
@@ -3657,10 +3873,19 @@ function nextKnowledgeQuestion() {
 function answerKnowledge(index, selected) {
     if (!knowledge?.running || knowledge.locked)
         return;
-    knowledge.locked = true;
     const question = knowledge.questions[knowledge.index];
     const correct = index === question.answer;
     const buttons = Array.from(byId("knowledgeChoices").querySelectorAll(".knowledge-choice"));
+    const mistakes = choiceMistakeCount("knowledgeChoices");
+    if (!correct) {
+        knowledge.streak = 0;
+        byId("knowledgeExplanation").className = "knowledge-explanation wrong";
+        const retry = applyChoicePenalty("knowledgeChoices", ".knowledge-choice", selected, buttons[question.answer], byId("knowledgeExplanation"), "고오스가 탐험 지도를 흐렸어요. 문제를 다시 읽고 한 번 더 골라요!", "두 번 틀렸어요. 정답과 해설을 확인하고 다음 탐험으로 이동해요.");
+        renderKnowledgeHud();
+        if (retry)
+            return;
+    }
+    knowledge.locked = true;
     buttons.forEach((button, buttonIndex) => {
         button.disabled = true;
         if (buttonIndex === question.answer)
@@ -3670,19 +3895,18 @@ function answerKnowledge(index, selected) {
         knowledge.correct += 1;
         knowledge.streak += 1;
         knowledge.best = Math.max(knowledge.best, knowledge.streak);
-        knowledge.score += 100 + knowledge.streak * 15 + question.tier * 20;
+        const baseScore = 100 + knowledge.streak * 15 + question.tier * 20;
+        knowledge.score += mistakes ? Math.round(baseScore * .5) : baseScore;
         selected.classList.add("correct");
         byId("knowledgeExplanation").className = "knowledge-explanation correct";
-        byId("knowledgeExplanation").textContent = "정답! " + question.explanation;
+        byId("knowledgeExplanation").textContent = (mistakes ? "재도전 성공! " : "정답! ") + question.explanation;
         correctSound();
         pokemonSparkBurst(8);
     }
     else {
         knowledge.streak = 0;
-        selected.classList.add("wrong");
         byId("knowledgeExplanation").className = "knowledge-explanation wrong";
         byId("knowledgeExplanation").textContent = "배움 획득! " + question.explanation;
-        wrongSound();
     }
     renderKnowledgeHud();
     window.setTimeout(() => {
@@ -4388,7 +4612,7 @@ let avatarChanging = false;
 let nameChanging = false;
 function showAvatarPicker(changing) {
     avatarChanging = changing;
-    byId("avatarCountText").textContent = "진화형을 제외한 인기 포켓몬 " + POKEMON.length + "종";
+    byId("avatarCountText").textContent = "기본형과 인기 진화형 포켓몬 " + POKEMON.length + "종";
     byId("introStage").classList.add("hidden-panel");
     byId("nameEntry").classList.add("hidden-panel");
     byId("avatarPick").classList.remove("hidden-panel");
