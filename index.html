@@ -63,7 +63,7 @@
       <div class="picker-head">
         <div>
           <h2>함께 공부할 포켓몬을 골라요</h2>
-          <p id="avatarCountText">진화형을 제외한 인기 포켓몬 80종</p>
+          <p id="avatarCountText">기본형과 인기 진화형 포켓몬 100종</p>
         </div>
         <button id="closeAvatar" class="ghost-button" type="button">닫기</button>
       </div>
@@ -76,9 +76,13 @@
       <button id="playerCard" class="player-card" type="button" aria-label="아바타 바꾸기">
         <span id="sideMascot" class="side-mascot"></span>
         <span class="player-copy">
-          <strong id="sideName">친구</strong>
+          <span class="player-identity">
+            <strong id="sideName">친구</strong>
+            <span class="side-rank"><b id="sideLevel">Lv.1</b><em id="sideTitle">새싹 트레이너</em></span>
+          </span>
           <small id="sideStars">별 0개</small>
         </span>
+        <span id="sideTrainer" class="side-trainer" aria-hidden="true"></span>
       </button>
 
       <nav class="side-nav" aria-label="주 메뉴">
@@ -225,7 +229,7 @@
           <button class="quit-button" data-quit="rain" type="button">그만하기</button>
         </div>
         <div class="rain-layout">
-          <div id="rainField" class="playfield"><div class="ground"></div></div>
+          <div id="rainField" class="playfield"><div id="rainSceneIntro" class="rain-scene-intro" aria-hidden="true"><div class="rain-scene-copy"><span>MAGIKARP RAIN RESCUE</span><strong>잉어킹 산성비 챌린지</strong><small>비 내리는 도시를 수식으로 지켜 주세요!</small></div></div><div class="ground"></div></div>
           <aside class="rain-controls">
             <div id="rainTrainer" class="trainer-cameo"></div>
             <p>문제가 땅에 닿기 전에 답을 입력해요.</p>
@@ -253,13 +257,14 @@
           <span>뒤집기 <b id="memoryMoves">0</b>번</span>
           <span>완성 <b id="memoryMatched">0</b>/<b id="memoryTotal">0</b></span>
           <span>연속 <b id="memoryCombo">0</b></span>
+          <span class="memory-lives">기회 <b id="memoryLives">❤️❤️❤️</b></span>
           <span>남은 시간 <b id="memoryTime">10:00</b></span>
           <button class="quit-button" data-quit="memory" type="button">그만하기</button>
         </div>
         <div class="memory-mission">
           <div id="memoryMascot" class="memory-ditto"></div>
           <div class="memory-mission-copy"><span>DITTO TRANSFORM LAB</span><h2>메타몽 메모리 게임</h2><p id="memoryStatus">메타몽이 변신한 포켓몬의 위치를 기억해요.</p></div>
-          <div class="memory-transform"><span id="memoryRound">1단계 변신</span><div><i id="memoryTransformBar"></i></div><b id="memoryTransformText">0 / 17</b></div>
+          <div class="memory-transform"><span id="memoryRound">1단계 변신</span><div><i id="memoryTransformBar"></i></div><b id="memoryTransformText">0 / 28</b></div>
         </div>
         <div id="memoryGrid" class="memory-grid"></div>
       </section>
@@ -400,7 +405,7 @@
           <button class="quit-button" data-quit="snack" type="button">그만하기</button>
         </div>
         <div class="snack-layout">
-          <div id="snackField" class="snack-field" aria-label="잠만보 열매 캐치 게임"><div class="snack-clouds" aria-hidden="true"></div><div id="snackPlayer" class="snack-player"></div></div>
+          <div id="snackField" class="snack-field" aria-label="잠만보 열매 캐치 게임"><div id="snackSceneIntro" class="snack-scene-intro" aria-hidden="true"><div class="snack-scene-copy"><span>BERRY HILL ADVENTURE</span><strong>잠만보 베리 대모험</strong><small>마을 언덕에서 맛있는 열매를 받아요!</small></div></div><div class="snack-clouds" aria-hidden="true"></div><div id="snackPlayer" class="snack-player"></div></div>
           <aside class="snack-controls"><span class="snack-route">BERRY FOREST</span><h2>잠만보 베리 대모험</h2><p>나무열매를 모아 10콤보 피버를 만들고, 바위는 피해요!</p><div class="snack-fever"><span>피버 게이지</span><div><i id="snackFeverBar"></i></div><b id="snackFeverText">0/10</b></div><div class="snack-move-buttons"><button data-snack-move="left" type="button">◀ 왼쪽</button><button data-snack-move="right" type="button">오른쪽 ▶</button></div><div class="snack-legend"><span>나무열매 +100</span><span>이상한사탕 +300</span><span>회복약 체력 +1</span><span>딱딱한돌 조심!</span></div></aside>
         </div>
       </section>
