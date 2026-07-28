@@ -248,6 +248,13 @@ const GAME_POKEMON_NAMES = {
     100: "찌리리공",
     113: "럭키"
 };
+const GHOST_PENALTY_POKEMON_IDS = [
+    92, 93, 94, 200, 292, 302, 353, 354, 355, 356, 425, 426, 429, 442, 477, 478, 479, 607, 608, 609, 708, 709, 710, 711, 769, 770, 778
+];
+function randomGhostPokemonId(severe = false) {
+    const pool = severe ? GHOST_PENALTY_POKEMON_IDS.slice(2) : GHOST_PENALTY_POKEMON_IDS;
+    return pool[Math.floor(Math.random() * pool.length)] ?? 94;
+}
 function pokemonById(id) {
     return POKEMON.find((pokemon) => pokemon.id === id) ?? {
         id,
@@ -623,7 +630,7 @@ function showMistakeEncounter(attempt) {
     else if (Math.random() < .5) {
         title.textContent = "팬텀이 정답을 공개했어요";
         message.textContent = "설명을 읽고 다음 문제에 도전해요.";
-        encounter.append(pokemonMedia(pokemonById(94), "mistake-character"));
+        encounter.append(pokemonMedia(pokemonById(randomGhostPokemonId()), "mistake-character"));
         playPokemonCry(94, .13);
     }
     else {
@@ -654,7 +661,7 @@ function applyChoicePenalty(containerId, selector, selected, correctButton, feed
             container.classList.remove("choice-penalty-lock");
             buttons.forEach((button) => { if (button !== selected)
                 button.disabled = false; });
-        }, 1100);
+        }, 2200);
         return true;
     }
     correctButton?.classList.add("correct");
@@ -2640,7 +2647,7 @@ function popBalloon(item) {
                 item.element.remove();
                 byId("balloonField").classList.remove("wrong-feedback");
                 balloon.inputLocked = false;
-            }, 520);
+            }, 1040);
         }
     }
     renderBalloonHud();
@@ -2650,7 +2657,7 @@ function balloonPenaltyBurst(origin, severe) {
     field.querySelector(".balloon-penalty-alert")?.remove();
     const alert = document.createElement("div");
     alert.className = `balloon-penalty-alert${severe ? " severe" : ""}`;
-    const ghost = pokemonMedia(pokemonById(severe ? 94 : 92), "balloon-penalty-pokemon");
+    const ghost = pokemonMedia(pokemonById(randomGhostPokemonId(severe)), "balloon-penalty-pokemon");
     ghost.setAttribute("aria-hidden", "true");
     const message = document.createElement("strong");
     message.textContent = severe ? "팬텀 방해! 풍선을 다시 섞어요" : "고오스 방해! -50점 · -3초";
@@ -2673,7 +2680,7 @@ function balloonRewardBurst(origin, points) {
     reward.style.left = `${rect.left - fieldRect.left + rect.width / 2}px`;
     reward.style.top = `${Math.max(55, rect.top - fieldRect.top + rect.height * .25)}px`;
     field.append(reward);
-    window.setTimeout(() => reward.remove(), 900);
+    window.setTimeout(() => reward.remove(), 1800);
 }
 function balloonNoteBurst(origin, bonus) {
     const field = byId("balloonField");
@@ -5478,3 +5485,65 @@ decorateGameScreens();
 bindEvents();
 restoreLastPlay();
 startIntro();
+const installCoordinateRuleDock = () => {
+    let updateQueued = false;
+    const syncRuleDock = () => {
+        updateQueued = false;
+        const screen = document.querySelector("#screen-coordinate");
+        if (!screen)
+            return;
+        const packets = Array.from(screen.querySelectorAll(".coordinate-packet"));
+        const packetGrid = packets[0]?.parentElement;
+        if (!packetGrid)
+            return;
+        const ruleLeaf = Array.from(screen.querySelectorAll("*"))
+            .find((element) => {
+            if (element.closest("[data-coordinate-rule-dock]"))
+                return false;
+            if (element.children.length > 0)
+                return false;
+            return /^(정상|오류)\s*신호/.test(element.textContent?.trim() ?? "");
+        });
+        if (!ruleLeaf)
+            return;
+        let dock = packetGrid.querySelector("[data-coordinate-rule-dock]");
+        if (!dock) {
+            dock = document.createElement("aside");
+            dock.dataset.coordinateRuleDock = "true";
+            dock.setAttribute("aria-live", "polite");
+            dock.innerHTML = `
+        <span class="coordinate-rule-dock__label">판별 규칙</span>
+        <strong class="coordinate-rule-dock__value"></strong>
+        <span class="coordinate-rule-dock__hint">조건과 다른 데이터를 선택하세요</span>
+      `;
+            packetGrid.insertBefore(dock, packetGrid.firstChild);
+        }
+        const value = dock.querySelector(".coordinate-rule-dock__value");
+        if (value)
+            value.textContent = ruleLeaf.textContent?.trim() ?? "";
+        let sourcePanel = ruleLeaf.parentElement;
+        while (sourcePanel && sourcePanel !== screen) {
+            const text = sourcePanel.textContent ?? "";
+            if (text.includes("현재 판별 규칙") && text.includes("오류 데이터")) {
+                sourcePanel.dataset.coordinateRuleSource = "true";
+                break;
+            }
+            sourcePanel = sourcePanel.parentElement;
+        }
+    };
+    const queueRuleDockUpdate = () => {
+        if (updateQueued)
+            return;
+        updateQueued = true;
+        window.requestAnimationFrame(syncRuleDock);
+    };
+    const observer = new MutationObserver(queueRuleDockUpdate);
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    queueRuleDockUpdate();
+};
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", installCoordinateRuleDock, { once: true });
+}
+else {
+    installCoordinateRuleDock();
+}
