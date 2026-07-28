@@ -701,12 +701,13 @@ function setActiveNav(name) {
 }
 function syncMoreMenuAccessibility() {
     const more = byId("sideMoreMenu");
-    const panel = more.querySelector(".side-more-panel");
+    const panel = byId("sideMorePanel");
     const backdrop = byId("moreMenuBackdrop");
     panel?.toggleAttribute("inert", !more.open);
     panel?.setAttribute("aria-hidden", String(!more.open));
     backdrop.toggleAttribute("inert", !more.open);
     backdrop.setAttribute("aria-hidden", String(!more.open));
+    document.body.classList.toggle("more-menu-open", more.open && window.matchMedia("(max-width: 1024px)").matches);
 }
 function closeMoreMenu(restoreFocus = false) {
     const more = byId("sideMoreMenu");
@@ -5373,6 +5374,25 @@ function bindEvents() {
     byId("closeAvatar").addEventListener("click", closeAvatarPicker);
     const sideMoreMenu = byId("sideMoreMenu");
     const sideMoreSummary = sideMoreMenu.querySelector("summary");
+    const sideMorePanel = byId("sideMorePanel");
+    const sideMoreBackdrop = byId("moreMenuBackdrop");
+    const sideMoreHome = document.createComment("side-more-home");
+    sideMoreMenu.insertBefore(sideMoreHome, sideMoreBackdrop);
+    const placeMoreMenu = () => {
+        if (window.matchMedia("(max-width: 1024px)").matches) {
+            document.body.append(sideMoreBackdrop, sideMorePanel);
+        }
+        else if (sideMoreHome.parentNode === sideMoreMenu) {
+            sideMoreMenu.insertBefore(sideMoreBackdrop, sideMoreHome.nextSibling);
+            sideMoreMenu.insertBefore(sideMorePanel, sideMoreBackdrop.nextSibling);
+        }
+        syncMoreMenuAccessibility();
+    };
+    placeMoreMenu();
+    window.matchMedia("(max-width: 1024px)").addEventListener("change", () => {
+        closeMoreMenu();
+        placeMoreMenu();
+    });
     sideMoreSummary?.addEventListener("click", (event) => {
         if (!window.matchMedia("(max-width: 1024px)").matches)
             return;
