@@ -1,0 +1,262 @@
+/* Voltorb meadow explorer: interaction and responsive polish */
+.voltorb-explorer-enhanced {
+  --voltorb-electric: #ffd84d;
+  --voltorb-electric-strong: #f3b817;
+  --voltorb-deep: #173f72;
+  --voltorb-safe: #30b879;
+  position: relative;
+  isolation: isolate;
+}
+
+.voltorb-enhancement-hud {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: min(100%, 760px);
+  margin: 10px auto 12px;
+  padding: 10px 12px;
+  border: 2px solid rgba(23, 63, 114, .22);
+  border-radius: 18px;
+  background: rgba(247, 252, 255, .9);
+  box-shadow: 0 7px 0 rgba(23, 63, 114, .12);
+  backdrop-filter: blur(8px);
+  color: var(--voltorb-deep);
+}
+
+.voltorb-hud-chip,
+.voltorb-touch-guide {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid rgba(39, 89, 145, .16);
+  font-size: clamp(.84rem, 1.4vw, 1rem);
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.voltorb-hud-chip b {
+  min-width: 1.2em;
+  margin-left: 5px;
+  color: #256ec2;
+  font-size: 1.08em;
+}
+
+.voltorb-enhancement-hud.has-combo .is-combo {
+  color: #684800;
+  border-color: #e6b921;
+  background: linear-gradient(135deg, #fff8c6, #ffe16c);
+  animation: voltorb-chip-charge 1.1s ease-in-out infinite alternate;
+}
+
+.voltorb-touch-guide {
+  flex: 1 1 220px;
+  color: #526985;
+  background: rgba(235, 246, 255, .92);
+}
+
+.voltorb-explorer-board {
+  display: grid !important;
+  grid-template-columns: repeat(var(--voltorb-board-columns, 8), minmax(0, 1fr)) !important;
+  gap: clamp(5px, .7vw, 10px) !important;
+  width: min(100%, 780px) !important;
+  margin-inline: auto !important;
+  padding: clamp(9px, 1.4vw, 16px) !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+  touch-action: manipulation;
+}
+
+.voltorb-explorer-cell {
+  position: relative !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 44px !important;
+  aspect-ratio: 1 / 1 !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+  contain: layout paint;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: border-color .18s ease, box-shadow .18s ease, filter .18s ease !important;
+}
+
+.voltorb-explorer-cell.is-pressing {
+  filter: brightness(1.05) saturate(1.12);
+  box-shadow: 0 0 0 4px rgba(255, 216, 77, .48), 0 7px 0 rgba(22, 57, 97, .18) !important;
+}
+
+.voltorb-explorer-cell.is-voltorb-marked::after {
+  content: "⚡";
+  position: absolute;
+  inset: 9% 9% auto auto;
+  display: grid;
+  place-items: center;
+  width: clamp(22px, 31%, 38px);
+  aspect-ratio: 1;
+  z-index: 6;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #ffe777, #f6b913);
+  box-shadow: 0 3px 0 #956707, 0 0 14px rgba(255, 218, 55, .72);
+  font-size: clamp(.72rem, 2.2vw, 1.15rem);
+  line-height: 1;
+  animation: voltorb-mark-in .25s cubic-bezier(.2, .85, .3, 1.35);
+}
+
+.voltorb-explorer-cell.is-voltorb-marked {
+  border-color: var(--voltorb-electric-strong) !important;
+  box-shadow: inset 0 0 0 3px rgba(255, 226, 82, .38), 0 7px 0 rgba(143, 95, 0, .19) !important;
+}
+
+.voltorb-explorer-cell.is-voltorb-success {
+  z-index: 3;
+  border-color: var(--voltorb-safe) !important;
+  box-shadow: 0 0 0 5px rgba(48, 184, 121, .24), 0 0 26px rgba(48, 184, 121, .55) !important;
+  animation: voltorb-cell-success .52s ease-out;
+}
+
+.voltorb-feedback-toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(22px, calc(env(safe-area-inset-bottom) + 16px));
+  z-index: 10020;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  max-width: min(90vw, 560px);
+  min-height: 52px;
+  padding: 11px 16px;
+  border: 3px solid var(--voltorb-deep);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 0 rgba(14, 47, 88, .2), 0 16px 34px rgba(11, 39, 73, .22);
+  color: #183863;
+  opacity: 0;
+  transform: translate(-50%, 16px) scale(.96);
+  pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
+}
+
+.voltorb-feedback-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.voltorb-feedback-toast.is-anchored {
+  left: var(--voltorb-toast-x, 50%);
+  top: var(--voltorb-toast-y, 50%);
+  bottom: auto;
+  transform: translate(-50%, -100%) scale(.96);
+}
+
+.voltorb-feedback-toast.is-anchored.is-visible {
+  transform: translate(-50%, -100%) scale(1);
+}
+
+.voltorb-feedback-toast.is-success {
+  border-color: #168354;
+  background: linear-gradient(135deg, #f5fff9, #d8ffea);
+}
+
+.voltorb-feedback-toast.is-danger {
+  border-color: #a82e36;
+  background: linear-gradient(135deg, #fff8f5, #ffe0db);
+  color: #80262c;
+}
+
+.voltorb-feedback-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 32px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #ffe777;
+  color: #715000;
+  font-weight: 900;
+}
+
+.voltorb-danger-pulse .voltorb-explorer-board {
+  animation: voltorb-danger-shake .42s ease both;
+}
+
+@keyframes voltorb-chip-charge {
+  to { box-shadow: 0 0 18px rgba(255, 205, 34, .6); }
+}
+
+@keyframes voltorb-mark-in {
+  from { opacity: 0; transform: scale(.45) rotate(-24deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+@keyframes voltorb-cell-success {
+  0% { filter: brightness(1); }
+  42% { filter: brightness(1.35) saturate(1.25); }
+  100% { filter: brightness(1); }
+}
+
+@keyframes voltorb-danger-shake {
+  0%, 100% { translate: 0; }
+  28% { translate: -5px 0; }
+  58% { translate: 5px 0; }
+  82% { translate: -2px 0; }
+}
+
+@media (max-width: 680px) {
+  .voltorb-enhancement-hud {
+    gap: 6px;
+    margin-block: 8px 10px;
+    padding: 8px;
+    border-radius: 15px;
+  }
+
+  .voltorb-hud-chip {
+    flex: 1 1 28%;
+    min-height: 34px;
+    padding-inline: 8px;
+  }
+
+  .voltorb-touch-guide {
+    order: -1;
+    flex-basis: 100%;
+    min-height: 34px;
+    font-size: .82rem;
+  }
+
+  .voltorb-explorer-board {
+    gap: 4px !important;
+    padding: 7px !important;
+  }
+
+  .voltorb-explorer-cell {
+    min-height: clamp(38px, 10.4vw, 46px) !important;
+  }
+
+  .voltorb-feedback-toast {
+    max-width: calc(100vw - 28px);
+    min-height: 48px;
+    padding: 10px 13px;
+    border-width: 2px;
+    border-radius: 16px;
+    font-size: .88rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voltorb-explorer-enhanced *,
+  .voltorb-feedback-toast {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
