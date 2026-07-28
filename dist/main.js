@@ -2194,7 +2194,9 @@ function revealMemoryCard(card) {
     const name = document.createElement("span");
     name.className = "memory-name";
     name.textContent = card.pokemon.name;
-    card.element.replaceChildren(pokemonMedia(card.pokemon), name);
+    const media = pokemonMedia(card.pokemon);
+    media.querySelector(".pokemon-fallback")?.remove();
+    card.element.replaceChildren(media, name);
     card.element.setAttribute("aria-label", card.pokemon.name);
 }
 function concealMemoryCard(card) {
