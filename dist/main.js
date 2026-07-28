@@ -5372,6 +5372,14 @@ function bindEvents() {
     });
     byId("closeAvatar").addEventListener("click", closeAvatarPicker);
     const sideMoreMenu = byId("sideMoreMenu");
+    const sideMoreSummary = sideMoreMenu.querySelector("summary");
+    sideMoreSummary?.addEventListener("click", (event) => {
+        if (!window.matchMedia("(max-width: 1024px)").matches)
+            return;
+        event.preventDefault();
+        sideMoreMenu.open = !sideMoreMenu.open;
+        syncMoreMenuAccessibility();
+    });
     sideMoreMenu.addEventListener("toggle", syncMoreMenuAccessibility);
     syncMoreMenuAccessibility();
     byId("closeMoreMenu").addEventListener("click", () => closeMoreMenu(true));
