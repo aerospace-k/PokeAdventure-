@@ -136,8 +136,8 @@ const MODES = {
         hint: "대칭축에서 같은 거리의 칸을 연결해 파치리스의 전기 에너지를 채워요.", colors: ["#52c8e8", "#3976c8"], category: "도형·공간"
     },
     coordinate: {
-        name: "폴리곤 좌표 미로", description: "장애물 미로에서 데이터를 모아 목표 좌표로 이동해요",
-        hint: "이동 에너지를 아끼며 데이터 칩을 모두 모아 출구를 열어요.", colors: ["#2f9cc7", "#4965c7"], category: "도형·공간"
+        name: "폴리곤 데이터 복구 작전", description: "규칙을 분석해 오류 데이터 패킷을 찾아 복구해요",
+        hint: "정상 데이터 규칙을 먼저 읽고 규칙과 다른 카드만 선택해요.", colors: ["#2f9cc7", "#4965c7"], category: "도형·공간"
     },
     history: {
         name: "발챙이 역사 시간여행", description: "발챙이와 역사 사건을 오래된 순서로 복원해요",
@@ -3741,267 +3741,179 @@ function finishSymmetry() {
     showResult(stars, "전기 대칭 연구 완료!", "파치리스의 대칭 회로 5개를 모두 연결했어요.", [[String(game.score), "점수"], [String(game.mistakes), "실수"], [String(game.size) + "×" + game.size, "격자"], ["5/5", "충전"]]);
 }
 let coordinate = null;
-function stopCoordinate() { if (coordinate)
-    coordinate.running = false; }
+function stopCoordinate() { if (!coordinate)
+    return; coordinate.running = false; if (coordinate.timer !== null)
+    window.clearInterval(coordinate.timer); }
+const coordinateEven = () => randomInt(2, 24) * 2;
+const coordinateOdd = () => randomInt(1, 24) * 2 + 1;
+const COORDINATE_RULES = [
+    { title: "정상 신호는 짝수예요", mission: "홀수 신호를 모두 찾아 복구하세요.", create: (bad) => ({ main: String(bad ? coordinateOdd() : coordinateEven()), sub: "SIGNAL" }) },
+    { title: "정상 체크섬은 3의 배수예요", mission: "3으로 나누어떨어지지 않는 체크섬을 찾으세요.", create: (bad) => { const base = randomInt(2, 20) * 3; return { main: String(bad ? base + randomInt(1, 2) : base), sub: "CHECKSUM" }; } },
+    { title: "안전 범위는 10부터 30까지예요", mission: "안전 범위를 벗어난 수치를 찾으세요.", create: (bad) => ({ main: String(bad ? (Math.random() < .5 ? randomInt(1, 9) : randomInt(31, 49)) : randomInt(10, 30)), sub: "RANGE" }) },
+    { title: "정상 좌표는 X+Y가 짝수예요", mission: "두 좌표의 합이 홀수인 패킷을 찾으세요.", create: (bad) => { const x = randomInt(1, 9); let y = randomInt(1, 9); if (((x + y) % 2 === 1) !== bad)
+            y = y === 9 ? y - 1 : y + 1; return { main: `(${x}, ${y})`, sub: "COORDINATE" }; } },
+    { title: "정상 좌표의 X와 Y는 홀짝이 같아요", mission: "홀수와 짝수가 섞인 좌표를 모두 찾으세요.", create: (bad) => { const x = randomInt(1, 9); let y = randomInt(1, 9); if (((x % 2) !== (y % 2)) !== bad)
+            y = y === 9 ? y - 1 : y + 1; return { main: `X${x} · Y${y}`, sub: "PARITY" }; } },
+    { title: "고출력 신호는 20보다 큰 짝수예요", mission: "20 이하이거나 홀수인 고출력 신호를 찾으세요.", create: (bad) => ({ main: String(bad ? (Math.random() < .5 ? randomInt(8, 20) : coordinateOdd() + 20) : randomInt(11, 25) * 2), sub: "HIGH POWER" }) },
+    { title: "정상 경로는 X가 Y보다 작아요", mission: "X가 Y보다 크거나 같은 좌표를 찾으세요.", create: (bad) => { const low = randomInt(1, 6); const high = randomInt(low + 1, 9); return { main: bad ? `X${high} → Y${low}` : `X${low} → Y${high}`, sub: "ROUTE" }; } },
+    { title: "정상 코드의 끝자리는 0 또는 5예요", mission: "끝자리가 0이나 5가 아닌 코드를 찾으세요.", create: (bad) => ({ main: String(randomInt(10, 89) * 10 + (bad ? randomInt(1, 4) : (Math.random() < .5 ? 0 : 5))), sub: "FINAL CODE" }) }
+];
 function startCoordinate() {
     if (state.grade === null)
         return;
-    const size = state.grade <= 1 ? 5 : state.grade <= 3 ? 6 : 7;
-    coordinate = { running: true, transitioning: false, stage: 0, score: 0, moves: 0, stageMoves: 0, moveLimit: 0, retries: 0, baseSize: size, size, x: 0, y: size - 1, goalX: size - 1, goalY: 0, obstacles: new Set(), dataCells: new Set(), dataTotal: 0, visited: new Set(), started: Date.now() };
+    coordinate = { running: true, transitioning: false, stage: 0, score: 0, combo: 0, bestCombo: 0, shield: 3, mistakes: 0, timeLeft: 16, timer: null, packets: [], errorsTotal: 0, errorsRemaining: 0, started: Date.now() };
     replaceWithPokemon(byId("coordinateMascot"), 137);
+    replaceWithPokemon(byId("coordinatePenaltyPokemon"), 94);
     showScreen("coordinate");
-    showThemedGameScene("coordinate", "폴리곤 데이터 연구소", "좌표를 읽고 데이터 칩을 회수해요!", 1200);
+    showThemedGameScene("coordinate", "폴리곤 데이터 복구 작전", "규칙을 분석하고 오류 패킷을 복구해요!", 1200);
     setupCoordinateStage();
-}
-function coordinatePath(size, obstacles, startX, startY, goalX, goalY) {
-    const startKey = startX + "," + startY;
-    const goalKey = goalX + "," + goalY;
-    const queue = [startKey];
-    const parents = new Map([[startKey, null]]);
-    const directions = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-    for (let cursor = 0; cursor < queue.length; cursor += 1) {
-        const key = queue[cursor];
-        if (key === goalKey)
-            break;
-        const [x, y] = key.split(",").map(Number);
-        directions.forEach(([dx, dy]) => {
-            const nx = x + dx;
-            const ny = y + dy;
-            const nextKey = nx + "," + ny;
-            if (nx < 0 || ny < 0 || nx >= size || ny >= size || obstacles.has(nextKey) || parents.has(nextKey))
-                return;
-            parents.set(nextKey, key);
-            queue.push(nextKey);
-        });
-    }
-    if (!parents.has(goalKey))
-        return null;
-    const path = [];
-    let cursor = goalKey;
-    while (cursor) {
-        const [x, y] = cursor.split(",").map(Number);
-        path.push([x, y]);
-        cursor = parents.get(cursor) ?? null;
-    }
-    return path.reverse();
-}
-function buildCoordinateMaze(size, stage, goalX, goalY) {
-    const startX = 0;
-    const startY = size - 1;
-    const directDistance = Math.abs(goalX - startX) + Math.abs(goalY - startY);
-    const minimumObstacles = Math.max(4, Math.floor(size * size * (.22 + stage * .018)));
-    const minimumDetour = 3 + Math.floor(stage / 2);
-    let best = null;
-    for (let attempt = 0; attempt < 240; attempt += 1) {
-        const obstacles = new Set();
-        const density = Math.min(.44, .3 + stage * .025);
-        for (let y = 0; y < size; y += 1)
-            for (let x = 0; x < size; x += 1) {
-                const key = x + "," + y;
-                if ((x === startX && y === startY) || (x === goalX && y === goalY))
-                    continue;
-                if (Math.random() < density)
-                    obstacles.add(key);
-            }
-        const path = coordinatePath(size, obstacles, startX, startY, goalX, goalY);
-        if (!path || obstacles.size < minimumObstacles)
-            continue;
-        const detour = path.length - 1 - directDistance;
-        if (!best || detour > best.path.length - 1 - directDistance || (detour === best.path.length - 1 - directDistance && obstacles.size > best.obstacles.size))
-            best = { obstacles, path };
-        if (detour >= minimumDetour)
-            return { obstacles, path };
-    }
-    /* Guaranteed fallback: alternating walls force a long zigzag instead of an empty board. */
-    const obstacles = new Set();
-    for (let x = 1; x < size - 1; x += 2) {
-        const gap = ((x - 1) / 2) % 2 === 0 ? 0 : size - 1;
-        for (let y = 0; y < size; y += 1)
-            if (y !== gap)
-                obstacles.add(x + "," + y);
-    }
-    obstacles.delete(startX + "," + startY);
-    obstacles.delete(goalX + "," + goalY);
-    const fallbackPath = coordinatePath(size, obstacles, startX, startY, goalX, goalY);
-    if (fallbackPath)
-        return { obstacles, path: fallbackPath };
-    if (best)
-        return best;
-    /* Last-resort carved corridor still keeps every non-route cell blocked. */
-    const carved = new Set();
-    let cx = startX;
-    let cy = startY;
-    carved.add(cx + "," + cy);
-    while (cy > goalY) {
-        cy -= 1;
-        carved.add(cx + "," + cy);
-    }
-    while (cx < goalX) {
-        cx += 1;
-        carved.add(cx + "," + cy);
-    }
-    const solid = new Set();
-    for (let y = 0; y < size; y += 1)
-        for (let x = 0; x < size; x += 1)
-            if (!carved.has(x + "," + y))
-                solid.add(x + "," + y);
-    return { obstacles: solid, path: Array.from(carved).map((key) => key.split(",").map(Number)) };
 }
 function setupCoordinateStage() {
     if (!coordinate?.running)
         return;
-    if (coordinate.stage >= 5) {
-        finishCoordinate();
+    if (coordinate.stage >= COORDINATE_RULES.length) {
+        finishCoordinate(true);
         return;
     }
-    coordinate.size = Math.min(7, coordinate.baseSize + Math.floor(coordinate.stage / 2));
-    const size = coordinate.size;
+    if (coordinate.timer !== null)
+        window.clearInterval(coordinate.timer);
+    const mobile = window.matchMedia("(max-width: 700px)").matches;
+    const count = mobile ? 9 : 12;
+    const errorCount = Math.min(4, 2 + Math.floor(coordinate.stage / 3));
+    const rule = COORDINATE_RULES[coordinate.stage];
+    const flags = shuffle(Array.from({ length: count }, (_, index) => index < errorCount));
+    coordinate.packets = flags.map((corrupted, index) => ({ id: index, ...rule.create(corrupted), corrupted, selected: false }));
+    coordinate.errorsTotal = errorCount;
+    coordinate.errorsRemaining = errorCount;
+    coordinate.timeLeft = Math.max(9, 17 - coordinate.stage);
     coordinate.transitioning = false;
-    coordinate.x = 0;
-    coordinate.y = size - 1;
-    coordinate.stageMoves = 0;
-    if (coordinate.stage % 2 === 0) {
-        coordinate.goalX = size - 1;
-        coordinate.goalY = randomInt(0, Math.max(0, Math.floor(size / 2) - 1));
-    }
-    else {
-        coordinate.goalX = randomInt(Math.ceil(size / 2), size - 1);
-        coordinate.goalY = 0;
-    }
-    const maze = buildCoordinateMaze(size, coordinate.stage, coordinate.goalX, coordinate.goalY);
-    coordinate.obstacles = maze.obstacles;
-    coordinate.dataCells.clear();
-    coordinate.dataTotal = Math.min(3, 1 + Math.floor(coordinate.stage / 2));
-    for (let index = 1; index <= coordinate.dataTotal; index += 1) {
-        const pathIndex = Math.max(1, Math.min(maze.path.length - 2, Math.round((maze.path.length - 1) * index / (coordinate.dataTotal + 1))));
-        const [x, y] = maze.path[pathIndex];
-        coordinate.dataCells.add(x + "," + y);
-    }
-    const energySlack = coordinate.stage === 0 ? 3 : coordinate.stage <= 2 ? 2 : 1;
-    coordinate.moveLimit = maze.path.length - 1 + energySlack;
-    coordinate.visited = new Set([coordinate.x + "," + coordinate.y]);
     renderCoordinate();
+    armCoordinateTimer();
 }
 function renderCoordinate() {
     if (!coordinate)
         return;
-    const collected = coordinate.dataTotal - coordinate.dataCells.size;
+    const rule = COORDINATE_RULES[coordinate.stage];
     byId("coordinateScore").textContent = String(coordinate.score);
-    byId("coordinateStage").textContent = (coordinate.stage + 1) + "/5";
-    byId("coordinateMoves").textContent = coordinate.stageMoves + "/" + coordinate.moveLimit;
-    byId("coordinateMission").textContent = "데이터 칩을 모두 모아 목표 좌표 (" + (coordinate.goalX + 1) + ", " + (coordinate.size - coordinate.goalY) + ")의 출구를 열어요.";
-    const remainingEnergy = Math.max(0, coordinate.moveLimit - coordinate.stageMoves);
-    const progress = byId("coordinateProgress");
-    progress.textContent = "데이터 " + collected + "/" + coordinate.dataTotal + " · 남은 에너지 " + remainingEnergy + " · 충돌/재방문 2칸";
-    progress.classList.toggle("low-energy", remainingEnergy <= Math.max(2, Math.ceil(coordinate.moveLimit * .2)));
+    byId("coordinateStage").textContent = (coordinate.stage + 1) + "/8";
+    byId("coordinateCombo").textContent = String(coordinate.combo);
+    byId("coordinateShield").textContent = coordinate.shield + "/3";
+    byId("coordinateTime").textContent = coordinate.timeLeft + "초";
+    byId("coordinateRuleTitle").textContent = rule.title;
+    byId("coordinateMission").textContent = rule.mission;
+    byId("coordinateProgress").textContent = "오류 데이터 " + (coordinate.errorsTotal - coordinate.errorsRemaining) + "/" + coordinate.errorsTotal;
     const board = byId("coordinateBoard");
-    board.style.setProperty("--coordinate-size", String(coordinate.size));
     board.replaceChildren();
-    for (let y = 0; y < coordinate.size; y += 1)
-        for (let x = 0; x < coordinate.size; x += 1) {
-            const key = x + "," + y;
-            const cell = document.createElement("div");
-            cell.className = "coordinate-cell";
-            cell.title = "(" + (x + 1) + ", " + (coordinate.size - y) + ")";
-            if (coordinate.visited.has(key))
-                cell.classList.add("visited");
-            if (coordinate.obstacles.has(key)) {
-                cell.classList.add("obstacle");
-                cell.textContent = "▦";
-            }
-            if (coordinate.dataCells.has(key)) {
-                cell.classList.add("data-chip");
-                cell.textContent = "◇";
-            }
-            if (x === coordinate.goalX && y === coordinate.goalY) {
-                cell.classList.add("goal");
-                if (coordinate.dataCells.size > 0)
-                    cell.classList.add("locked");
-                cell.textContent = coordinate.dataCells.size > 0 ? "●" : "★";
-            }
-            if (x === coordinate.x && y === coordinate.y) {
-                cell.classList.add("player");
-                const image = document.createElement("img");
-                image.src = spriteUrl(137);
-                image.alt = "폴리곤";
-                cell.replaceChildren(image);
-            }
-            const label = document.createElement("small");
-            label.textContent = (x + 1) + "," + (coordinate.size - y);
-            cell.append(label);
-            board.append(cell);
-        }
+    coordinate.packets.forEach((packet) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "coordinate-packet";
+        if (packet.selected)
+            button.classList.add("recovered");
+        button.disabled = packet.selected || coordinate?.transitioning === true;
+        button.innerHTML = `<i aria-hidden="true"></i><strong>${packet.main}</strong><small>${packet.sub}</small>`;
+        button.addEventListener("click", () => chooseCoordinatePacket(packet.id, button));
+        board.append(button);
+    });
 }
-function moveCoordinate(direction) {
+function armCoordinateTimer() {
+    if (!coordinate)
+        return;
+    coordinate.timer = window.setInterval(() => {
+        if (!coordinate?.running || coordinate.transitioning)
+            return;
+        coordinate.timeLeft -= 1;
+        byId("coordinateTime").textContent = coordinate.timeLeft + "초";
+        if (coordinate.timeLeft <= 0)
+            failCoordinateStage("시간 초과! 팬텀이 데이터 배열을 바꿨어요.");
+    }, 1000);
+}
+function chooseCoordinatePacket(id, button) {
     if (!coordinate?.running || coordinate.transitioning)
         return;
-    const delta = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-    const [dx, dy] = delta[direction] ?? [0, 0];
-    const nx = coordinate.x + dx;
-    const ny = coordinate.y + dy;
-    const positionKey = nx + "," + ny;
-    coordinate.moves += 1;
-    if (nx < 0 || ny < 0 || nx >= coordinate.size || ny >= coordinate.size || coordinate.obstacles.has(nx + "," + ny)) {
-        coordinate.stageMoves += 2;
-        coordinate.score = Math.max(0, coordinate.score - 10);
-        wrongSound();
-        showToast("데이터 벽 충돌! 이동 에너지 2칸을 잃었어요.");
-        if (coordinate.stageMoves >= coordinate.moveLimit)
-            resetCoordinateStage();
+    const packet = coordinate.packets.find((item) => item.id === id);
+    if (!packet || packet.selected)
+        return;
+    if (packet.corrupted) {
+        packet.selected = true;
+        coordinate.errorsRemaining -= 1;
+        coordinate.combo += 1;
+        coordinate.bestCombo = Math.max(coordinate.bestCombo, coordinate.combo);
+        coordinate.score += 90 + coordinate.combo * 15 + coordinate.stage * 10;
+        button.classList.add("recovered");
+        button.disabled = true;
+        correctSound();
+        pokemonSparkBurst(137);
+        byId("coordinateStatus").textContent = "오류 패킷 복구 성공! 남은 데이터를 분석해요.";
+        if (coordinate.errorsRemaining <= 0) {
+            coordinate.transitioning = true;
+            if (coordinate.timer !== null)
+                window.clearInterval(coordinate.timer);
+            coordinate.score += coordinate.timeLeft * 10;
+            coordinate.stage += 1;
+            byId("coordinateStatus").textContent = "복구 완료! 다음 데이터 규칙을 불러와요.";
+            window.setTimeout(setupCoordinateStage, 800);
+        }
         else
             renderCoordinate();
         return;
     }
-    const revisiting = coordinate.visited.has(positionKey);
-    coordinate.stageMoves += revisiting ? 2 : 1;
-    if (revisiting) {
-        coordinate.score = Math.max(0, coordinate.score - 5);
-        showToast("이미 조사한 좌표예요. 에너지 2칸을 사용했어요.");
-    }
-    coordinate.x = nx;
-    coordinate.y = ny;
-    coordinate.visited.add(nx + "," + ny);
-    moveSound();
-    if (coordinate.dataCells.delete(positionKey)) {
-        coordinate.score += 60;
-        correctSound();
-        showToast("데이터 칩 획득! 출구 잠금이 약해졌어요.");
-    }
-    if (nx === coordinate.goalX && ny === coordinate.goalY && coordinate.dataCells.size > 0) {
-        wrongSound();
-        showToast("출구가 잠겨 있어요. 남은 데이터 칩을 찾아요.");
-    }
-    if (nx === coordinate.goalX && ny === coordinate.goalY && coordinate.dataCells.size === 0) {
-        coordinate.score += 180 + Math.max(0, coordinate.moveLimit - coordinate.stageMoves) * 12;
-        coordinate.stage += 1;
+    coordinate.mistakes += 1;
+    coordinate.combo = 0;
+    coordinate.shield -= 1;
+    coordinate.score = Math.max(0, coordinate.score - 80);
+    button.classList.add("wrong");
+    wrongSound();
+    flashCoordinatePenalty();
+    updateCoordinateHud();
+    window.setTimeout(() => button.classList.remove("wrong"), 650);
+    if (coordinate.shield <= 0) {
         coordinate.transitioning = true;
-        correctSound();
-        pokemonSparkBurst(137);
-        window.setTimeout(setupCoordinateStage, 650);
+        window.setTimeout(() => finishCoordinate(false), 900);
     }
-    else if (coordinate.stageMoves >= coordinate.moveLimit)
-        resetCoordinateStage();
-    renderCoordinate();
 }
-function resetCoordinateStage() {
+function updateCoordinateHud() {
     if (!coordinate)
         return;
-    coordinate.retries += 1;
-    coordinate.score = Math.max(0, coordinate.score - 40);
-    coordinate.transitioning = true;
-    wrongSound();
-    showToast("이동 에너지가 부족해요. 새 지도로 다시 도전해요.");
-    window.setTimeout(setupCoordinateStage, 650);
+    byId("coordinateScore").textContent = String(coordinate.score);
+    byId("coordinateCombo").textContent = String(coordinate.combo);
+    byId("coordinateShield").textContent = coordinate.shield + "/3";
 }
-function finishCoordinate() {
+function flashCoordinatePenalty() {
+    const overlay = byId("coordinatePenalty");
+    overlay.hidden = false;
+    byId("coordinateStatus").textContent = "정상 데이터였어요. 규칙을 다시 확인하세요!";
+    window.setTimeout(() => { overlay.hidden = true; }, 750);
+}
+function failCoordinateStage(message) {
+    if (!coordinate?.running || coordinate.transitioning)
+        return;
+    coordinate.transitioning = true;
+    coordinate.shield -= 1;
+    coordinate.combo = 0;
+    coordinate.mistakes += 1;
+    coordinate.score = Math.max(0, coordinate.score - 100);
+    if (coordinate.timer !== null)
+        window.clearInterval(coordinate.timer);
+    wrongSound();
+    flashCoordinatePenalty();
+    showToast(message);
+    updateCoordinateHud();
+    if (coordinate.shield <= 0)
+        window.setTimeout(() => finishCoordinate(false), 900);
+    else
+        window.setTimeout(setupCoordinateStage, 900);
+}
+function finishCoordinate(completed = true) {
     if (!coordinate?.running || state.grade === null)
         return;
     const game = coordinate;
     stopCoordinate();
-    const stars = game.retries === 0 ? 3 : game.retries <= 2 ? 2 : 1;
-    saveRecord({ name: getName() || "친구", mode: "coordinate", grade: state.grade, diff: "easy", score: game.score, stars, detail: "5지도 · 재도전 " + game.retries + "회", timestamp: Date.now() });
-    showThemedGameScene("coordinate", "데이터 연구 완료!", "다섯 개 좌표 미로를 모두 통과했어요.", 1800);
-    showResult(stars, "좌표 미로 탈출!", "폴리곤과 다섯 개 데이터 미로를 통과했어요.", [[String(game.score), "점수"], [String(game.moves), "총 이동"], [String(game.retries), "재도전"], ["5/5", "완료"]]);
+    const cleared = Math.min(game.stage, 8);
+    const stars = completed && game.mistakes <= 1 ? 3 : cleared >= 6 ? 2 : cleared >= 3 ? 1 : 0;
+    saveRecord({ name: getName() || "친구", mode: "coordinate", grade: state.grade, diff: "easy", score: game.score, stars, detail: cleared + "단계 · 오답 " + game.mistakes + "회", timestamp: Date.now() });
+    showThemedGameScene("coordinate", completed ? "데이터 복구 완료!" : "보호막 소진!", completed ? "폴리곤 연구소의 데이터가 모두 정상화됐어요." : "규칙을 다시 익히고 재도전해요.", 1800);
+    showResult(stars, completed ? "폴리곤 데이터 복구 완료!" : "데이터 복구 중단", completed ? "8개의 데이터 규칙을 모두 분석했어요." : "보호막이 모두 사라졌어요. 규칙을 천천히 읽어보세요.", [[String(game.score), "점수"], [String(game.bestCombo), "최고 연속"], [String(game.mistakes), "오답"], [cleared + "/8", "복구"]]);
 }
 const HISTORY_EVENTS = [
     { year: -70000, label: "사람들이 돌을 다듬어 도구로 사용했어요", yearLabel: "구석기 시대", minGrade: 0 }, { year: -8000, label: "농사를 짓고 한곳에 모여 살기 시작했어요", yearLabel: "신석기 시대", minGrade: 0 },
@@ -5138,10 +5050,10 @@ function openLeaderboard() {
     showScreen("leaderboard");
 }
 const HELP_CONTROLS = {
-    quiz: "숫자판·보기 선택", rain: "숫자판 입력", mole: "디그다 터치", memory: "카드 뒤집기", ox: "O·X 선택", balloon: "푸린 터치", space: "도형 보기 선택", mine: "칸 열기·몬스터볼 표시", knowledge: "보기 선택", symmetry: "대칭 칸 채우기", coordinate: "방향 버튼", history: "사건 순서 선택", safety: "안전 행동 선택", snack: "터치·좌우 이동"
+    quiz: "숫자판·보기 선택", rain: "숫자판 입력", mole: "디그다 터치", memory: "카드 뒤집기", ox: "O·X 선택", balloon: "푸린 터치", space: "도형 보기 선택", mine: "칸 열기·몬스터볼 표시", knowledge: "보기 선택", symmetry: "대칭 칸 채우기", coordinate: "오류 데이터 선택", history: "사건 순서 선택", safety: "안전 행동 선택", snack: "터치·좌우 이동"
 };
 const HELP_DURATIONS = {
-    quiz: "약 3~5분", rain: "최대 10분", mole: "60초", memory: "최대 10분", ox: "60초", balloon: "60초", space: "약 4~7분", mine: "약 5~10분", knowledge: "약 3~5분", symmetry: "약 3~6분", coordinate: "약 3~7분", history: "약 3~5분", safety: "약 3~5분", snack: "60초"
+    quiz: "약 3~5분", rain: "최대 10분", mole: "60초", memory: "최대 10분", ox: "60초", balloon: "60초", space: "약 4~7분", mine: "약 5~10분", knowledge: "약 3~5분", symmetry: "약 3~6분", coordinate: "약 3~5분", history: "약 3~5분", safety: "약 3~5분", snack: "60초"
 };
 let activeHelpCategory = "all";
 function renderHelpCards() {
@@ -5477,7 +5389,6 @@ function bindEvents() {
     });
     byId("symmetryCheck").addEventListener("click", checkSymmetry);
     byId("symmetryHint").addEventListener("click", useSymmetryHint);
-    document.querySelectorAll("[data-move]").forEach((button) => button.addEventListener("click", () => moveCoordinate(button.dataset.move ?? "")));
     document.querySelectorAll("[data-snack-move]").forEach((button) => button.addEventListener("click", () => moveSnack(button.dataset.snackMove === "left" ? -12 : 12)));
     byId("snackField").addEventListener("pointerdown", (event) => moveSnackTo(event.clientX));
     byId("snackField").addEventListener("pointermove", (event) => { if (event.buttons === 1 || event.pointerType === "touch")
