@@ -11,7 +11,7 @@
   <link rel="shortcut icon" href="./assets/pokeball-favicon-32.png?v=1.0.20260726.6">
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/pokeball-apple-touch-icon.png?v=1.0.20260726.6">
   <link rel="manifest" href="./site.webmanifest?v=1.0.20260726.6">
-  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260728.76">
+  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260728.78">
   <script>document.documentElement.dataset.introScene = Math.random() < 0.5 ? "adventure" : "rocket";</script>
   <meta name="application-name" content="포켓몬 배움 탐험대">
   <meta name="app-version" content="1.0">
@@ -369,13 +369,24 @@
 
       <section id="screen-coordinate" class="screen game-screen">
         <div class="hud">
-          <span>점수 <b id="coordinateScore">0</b></span><span>지도 <b id="coordinateStage">1/5</b></span>
-          <span>이동 에너지 <b id="coordinateMoves">0/0</b></span><button class="quit-button" data-quit="coordinate" type="button">그만하기</button>
+          <span>점수 <b id="coordinateScore">0</b></span><span>복구 <b id="coordinateStage">1/8</b></span>
+          <span>연속 <b id="coordinateCombo">0</b></span><span>보호막 <b id="coordinateShield">3/3</b></span>
+          <span>시간 <b id="coordinateTime">16초</b></span><button class="quit-button" data-quit="coordinate" type="button">그만하기</button>
         </div>
         <div class="coordinate-layout">
-          <article class="coordinate-guide"><div id="coordinateMascot" class="lab-pokemon"></div><h2>폴리곤 좌표 미로</h2><p id="coordinateMission"></p><div id="coordinateProgress" class="coordinate-progress">데이터 0/0</div></article>
-          <div id="coordinateBoard" class="coordinate-board" aria-label="좌표 미로"></div>
-          <div class="direction-pad" aria-label="이동 버튼"><button data-move="up" type="button">▲</button><button data-move="left" type="button">◀</button><button data-move="down" type="button">▼</button><button data-move="right" type="button">▶</button></div>
+          <article class="coordinate-guide">
+            <span class="coordinate-lab-label">PORYGON DATA RECOVERY</span>
+            <div id="coordinateMascot" class="lab-pokemon"></div>
+            <div class="coordinate-guide-copy"><h2>폴리곤 데이터 복구 작전</h2><p>정상 데이터 규칙을 읽고 오류 패킷만 찾아 복구해요.</p></div>
+            <div class="coordinate-rule-card"><small>현재 판별 규칙</small><strong id="coordinateRuleTitle">정상 데이터는 짝수예요</strong><p id="coordinateMission">규칙에 어긋난 패킷을 모두 선택하세요.</p></div>
+            <div id="coordinateProgress" class="coordinate-progress">오류 데이터 0/0</div>
+          </article>
+          <article class="coordinate-console">
+            <header><div><small>DATA STREAM</small><strong id="coordinateStatus">오류 패킷을 찾아 선택하세요.</strong></div><span>POLYGON-137</span></header>
+            <div id="coordinateBoard" class="coordinate-board" aria-label="폴리곤 오류 데이터 패킷"></div>
+            <p class="coordinate-tip">규칙과 다른 카드만 선택하세요. 정상 데이터를 누르면 보호막이 줄어요.</p>
+          </article>
+          <div id="coordinatePenalty" class="coordinate-penalty" aria-live="assertive" hidden><div id="coordinatePenaltyPokemon"></div><strong>팬텀의 데이터 방해!</strong><span>보호막 1칸과 점수를 잃었어요.</span></div>
         </div>
       </section>
 
