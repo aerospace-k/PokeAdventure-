@@ -112,8 +112,8 @@ const MODES = {
         hint: "메타몽이 변신한 카드 위치를 기억하고 연속으로 짝을 맞혀 변신 에너지를 채워요.", colors: ["#df78c8", "#8a5bc2"], category: "미니게임"
     },
     ox: {
-        name: "고라파덕 참·거짓 OX", description: "식과 답이 맞는지 판단해요",
-        hint: "식을 끝까지 계산한 다음 O 또는 X를 선택해요.", colors: ["#f06b8f", "#c9466b"], category: "암산·수 연산"
+        name: "고라파덕 오류 탐정 OX", description: "계산 속 실수를 빠르게 찾아요",
+        hint: "식을 검산해 맞는 식인지 틀린 식인지 한 번에 판단해요. 5연속 성공하면 시간을 회복해요.", colors: ["#f06b8f", "#c9466b"], category: "암산·수 연산"
     },
     balloon: {
         name: "푸린 풍선 터뜨리기", description: "정답 풍선을 찾아 터뜨려요",
@@ -168,7 +168,7 @@ const HELP = [
     ["잉어킹 산성비 챌린지", "일반 문제는 땅에 닿기 전에 풀고, 보라색 로켓단 함정은 입력하지 않고 지나가게 해요."],
     ["디그다 찾기", "목표 식의 정답을 든 디그다를 선택해요. 문제 변경 시 화면의 디그다도 함께 바뀌어요."],
     ["짝맞추기", "식 카드와 답 카드를 짝지어요. 게임을 나가면 남은 예약 동작도 안전하게 종료돼요."],
-    ["고라파덕 참·거짓 OX", "제시된 식과 답이 맞는지 판단해요. 오답 감점으로 0초가 되면 즉시 끝나요."],
+    ["고라파덕 오류 탐정 OX", "계산 속 실수 유형을 찾아 한 번에 판단해요. 5연속 성공하면 시간이 늘고, 오답이면 3초가 줄어요."],
     ["푸린 풍선 터뜨리기", "정답 풍선을 터뜨려 60초 동안 높은 점수에 도전해요."],
     ["나몰빼미 도형·공간 탐험", "도형 회전, 위에서 내려다본 모습, 쌓기나무, 거울 대칭과 정육면체 전개도를 학년에 맞춰 해결해요."],
     ["찌리리공 지뢰찾기", "숫자 단서를 보고 안전한 칸을 열어요. 오른쪽 클릭이나 표시 모드로 찌리리공 위치에 몬스터볼을 놓아요."]
@@ -1027,35 +1027,79 @@ function pokemonAvatarMedia(pokemon) {
     }
     return media;
 }
-function discoveredPokemonCount() {
-    const progress = getTrainerProgress();
+function discoveredPokemonCountAtStars(stars) {
+    const progress = getTrainerProgress(Math.max(0, Math.floor(stars)));
     return Math.min(POKEMON.length, 5 + progress.stars + progress.current.dexBonus);
+}
+function discoveredPokemonCount() {
+    return discoveredPokemonCountAtStars(getLifetimeStars());
+}
+let pokedexFilter = "all";
+let pokedexQuery = "";
+function renderPokedexGrid(unlocked) {
+    const grid = byId("pokedexGrid");
+    const query = pokedexQuery.trim().toLocaleLowerCase("ko-KR");
+    const visible = POKEMON.map((pokemon, index) => ({ pokemon, index })).filter(({ pokemon, index }) => {
+        const discovered = index < unlocked;
+        if (pokedexFilter === "discovered" && !discovered)
+            return false;
+        if (pokedexFilter === "locked" && discovered)
+            return false;
+        if (!query)
+            return true;
+        const matchesNumber = String(pokemon.id).includes(query);
+        const matchesKnownName = discovered && pokemon.name.toLocaleLowerCase("ko-KR").includes(query);
+        return matchesNumber || matchesKnownName;
+    });
+    grid.replaceChildren();
+    visible.forEach(({ pokemon, index }) => {
+        const discovered = index < unlocked;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.pokemonId = String(pokemon.id);
+        button.className = "pokedex-entry " + (discovered ? "discovered" : "locked");
+        button.disabled = !discovered;
+        button.setAttribute("aria-label", discovered ? "No." + pokemon.id + " " + pokemon.name + " 자세히 보기" : "No." + pokemon.id + " 미발견 포켓몬");
+        const image = document.createElement("img");
+        image.src = spriteUrl(pokemon.id);
+        image.alt = discovered ? pokemon.name : "발견하지 않은 포켓몬";
+        image.loading = "lazy";
+        const number = document.createElement("small");
+        number.textContent = "No." + String(pokemon.id).padStart(3, "0");
+        const name = document.createElement("strong");
+        name.textContent = discovered ? pokemon.name : "???";
+        button.append(image, number, name);
+        if (discovered && index === unlocked - 1 && unlocked < POKEMON.length) {
+            const newBadge = document.createElement("span");
+            newBadge.className = "pokedex-new-badge";
+            newBadge.textContent = "NEW";
+            button.append(newBadge);
+        }
+        if (discovered)
+            button.addEventListener("click", () => loadPokedexDetail(pokemon, button));
+        grid.append(button);
+    });
+    if (!visible.length) {
+        const empty = document.createElement("p");
+        empty.className = "pokedex-empty";
+        empty.textContent = query ? "검색 조건에 맞는 포켓몬이 없어요." : "이 조건에 해당하는 포켓몬이 없어요.";
+        grid.append(empty);
+    }
+    byId("pokedexVisibleCount").textContent = visible.length + "마리 표시";
+    grid.setAttribute("aria-label", pokedexFilter === "all" ? "전체 포켓몬 목록" : pokedexFilter === "discovered" ? "발견한 포켓몬 목록" : "미발견 포켓몬 목록");
+    document.querySelectorAll("[data-pokedex-filter]").forEach((button) => {
+        const active = button.dataset.pokedexFilter === pokedexFilter;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+    });
 }
 function openPokedex() {
     cleanupGame();
     setActiveNav("pokedex");
     const unlocked = discoveredPokemonCount();
     byId("pokedexCount").textContent = unlocked + " / " + POKEMON.length + " 발견";
-    const grid = byId("pokedexGrid");
-    grid.replaceChildren();
-    POKEMON.forEach((pokemon, index) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "pokedex-entry" + (index < unlocked ? " discovered" : " locked");
-        button.disabled = index >= unlocked;
-        const image = document.createElement("img");
-        image.src = spriteUrl(pokemon.id);
-        image.alt = index < unlocked ? pokemon.name : "발견하지 않은 포켓몬";
-        image.loading = "lazy";
-        const number = document.createElement("small");
-        number.textContent = "No." + String(pokemon.id).padStart(3, "0");
-        const name = document.createElement("strong");
-        name.textContent = index < unlocked ? pokemon.name : "???";
-        button.append(image, number, name);
-        if (index < unlocked)
-            button.addEventListener("click", () => loadPokedexDetail(pokemon, button));
-        grid.append(button);
-    });
+    byId("pokedexSearch").value = pokedexQuery;
+    renderPokedexGrid(unlocked);
     const detail = byId("pokedexDetail");
     detail.replaceChildren();
     detail.classList.add("pokedex-intro");
@@ -1087,7 +1131,8 @@ function openPokedex() {
         stats.append(stat);
     });
     const tip = document.createElement("small");
-    tip.textContent = unlocked >= POKEMON.length ? "도감을 완성했어요!" : "별을 모을 때마다 새로운 연구가 열려요.";
+    const nextPokemon = POKEMON[unlocked];
+    tip.textContent = unlocked >= POKEMON.length ? "도감을 완성했어요!" : "다음 연구: " + nextPokemon.name + " · 별 1개를 더 모아 보세요.";
     progress.append(progressLabel, progressTrack);
     copy.append(kicker, title, message, progress, stats, tip);
     detail.append(oak, copy);
@@ -1420,7 +1465,7 @@ function showThemedGameScene(theme, title, subtitle, duration = 1300) {
         quiz: "PIKACHU MATH CLASS",
         balloon: "JIGGLYPUFF SKY CONCERT",
         coordinate: "PORYGON DATA LAB",
-        ox: "PSYDUCK OX CLASS",
+        ox: "PSYDUCK ERROR LAB",
         mole: "DIGLETT CAVE EXPEDITION",
         mine: "VOLTORB MEADOW SEARCH",
         symmetry: "PACHIRISU SYMMETRY LAB",
@@ -2317,6 +2362,10 @@ function finishMemory(timedOut = false, failed = false) {
     showThemedGameScene("memory", "변신 연구 완료!", "기억한 카드의 짝을 멋지게 찾아냈어요.", 1700);
     showResult(stars, title, message, [[String(game.score + stars * 100), "점수"], [String(game.mistakes) + "/3", "오답"], [String(game.bestCombo), "최고 연속"], [game.totalMatched + "/" + MEMORY_TOTAL_PAIRS, "변신 완성"]]);
 }
+const OX_TRAP_LABELS = {
+    correct: "맞는 식 의심", "one-step": "1 차이 함정", operation: "연산 기호 착각",
+    "place-value": "자리값 실수", nearby: "가까운 답 함정"
+};
 let ox = null;
 function stopOx() {
     if (!ox)
@@ -2328,12 +2377,17 @@ function stopOx() {
         window.clearTimeout(ox.nextTimer);
 }
 function startOx() {
-    ox = { running: true, score: 0, combo: 0, best: 0, correct: 0, time: 60, current: { problem: newProblem("easy"), shown: 0, truth: false }, countdown: null, nextTimer: null };
+    ox = {
+        running: true, score: 0, combo: 0, best: 0, correct: 0, time: 60, started: performance.now(),
+        current: { problem: newProblem("easy"), shown: 0, truth: false, trap: "nearby", started: performance.now() },
+        countdown: null, nextTimer: null, trueTotal: 0, trueCorrect: 0, falseTotal: 0, falseCorrect: 0, decisionTotal: 0,
+        trapMistakes: { correct: 0, "one-step": 0, operation: 0, "place-value": 0, nearby: 0 }
+    };
     replaceWithPokemon(byId("oxPsyduck"), 54);
     nextOx();
     renderOxHud();
     showScreen("ox");
-    showThemedGameScene("ox", "고라파덕 OX 교실", "수식을 읽고 참인지 거짓인지 판단해요!", 900);
+    showThemedGameScene("ox", "고라파덕 오류 탐정", "계산 속에 숨은 실수를 한 번에 찾아내요!", 900);
     ox.countdown = window.setInterval(() => {
         if (!ox?.running)
             return;
@@ -2343,28 +2397,59 @@ function startOx() {
             finishOx();
     }, 1000);
 }
+function alternateOperationAnswer(problem) {
+    const match = problem.display.match(/^(\d+)\s*([+\-×÷])\s*(\d+)$/);
+    if (!match)
+        return null;
+    const left = Number(match[1]);
+    const operator = match[2];
+    const right = Number(match[3]);
+    if (operator === "+")
+        return Math.abs(left - right);
+    if (operator === "-")
+        return left + right;
+    if (operator === "×")
+        return left + right;
+    if (operator === "÷")
+        return left * right;
+    return null;
+}
+function oxWrongAnswers(problem) {
+    const candidates = [];
+    const add = (trap, shown) => {
+        const safe = Math.max(0, Math.round(shown));
+        if (safe !== problem.answer && !candidates.some((candidate) => candidate.shown === safe))
+            candidates.push({ trap, shown: safe });
+    };
+    add("one-step", problem.answer + choose([-1, 1]));
+    add("nearby", problem.answer + choose([-5, -2, 2, 5]));
+    add("place-value", problem.answer + choose(problem.answer >= 10 ? [-10, 10] : [-3, 3]));
+    const alternate = alternateOperationAnswer(problem);
+    if (alternate !== null)
+        add("operation", alternate);
+    return candidates.length ? candidates : [{ trap: "nearby", shown: problem.answer + 1 }];
+}
 function nextOx() {
     if (!ox?.running)
         return;
-    resetChoicePenalty("screen-ox");
-    const problem = newProblem(difficultyForElapsed(performance.now() - (60 - ox.time) * 1000, 60));
-    const truth = Math.random() < .5;
-    let shown = problem.answer;
-    if (!truth) {
-        const offset = choose([-10, -5, -2, -1, 1, 2, 5, 10]);
-        shown = Math.max(0, problem.answer + offset);
-        if (shown === problem.answer)
-            shown += 1;
-    }
-    ox.current = { problem, shown, truth: shown === problem.answer };
+    const problem = newProblem(difficultyForElapsed(ox.started, 60));
+    const truth = ox.trueTotal === ox.falseTotal ? Math.random() < .5 : ox.trueTotal < ox.falseTotal;
+    const wrong = choose(oxWrongAnswers(problem));
+    const shown = truth ? problem.answer : wrong.shown;
+    ox.current = { problem, shown, truth, trap: truth ? "correct" : wrong.trap, started: performance.now() };
     byId("oxProblem").textContent = problem.display + " = " + shown;
     byId("oxPsyduck").className = "ox-mascot thinking";
-    byId("oxReaction").textContent = "고라파덕도 고민 중...";
+    byId("oxReaction").textContent = "오류 탐정 모드! 맞는 식인지 살펴봐요.";
+    byId("screen-ox").classList.remove("correct-flash", "wrong-flash");
+    byId("screen-ox").querySelectorAll(".ox-button").forEach((button) => {
+        button.disabled = false;
+        button.classList.remove("correct", "wrong");
+    });
     renderOxBoost();
 }
-function reactOx(correct) {
+function reactOx(correct, message) {
     byId("oxPsyduck").className = "ox-mascot " + (correct ? "happy" : "confused");
-    byId("oxReaction").textContent = correct ? "정답이야! 정말 멋져!" : "앗, 다시 생각해 보자!";
+    byId("oxReaction").textContent = message;
     const screen = byId("screen-ox");
     screen.classList.remove("correct-flash", "wrong-flash");
     void screen.offsetWidth;
@@ -2377,43 +2462,61 @@ function renderOxBoost() {
     const ready = ox.combo > 0 && remainder === 0;
     const value = ready ? 5 : remainder;
     byId("oxBoostBar").style.width = `${value * 20}%`;
-    byId("oxBoostText").textContent = ready ? "보너스!" : `${value} / 5`;
+    byId("oxBoostText").textContent = ready ? "시간 +4초" : `${value} / 5`;
     document.querySelector("#screen-ox .ox-boost")?.classList.toggle("ready", ready);
 }
 function answerOx(answer) {
     if (!ox?.running || ox.nextTimer !== null)
         return;
-    const mistakes = choiceMistakeCount("screen-ox");
-    if (answer === ox.current.truth) {
+    const round = ox.current;
+    const correct = answer === round.truth;
+    const decisionTime = Math.max(0, performance.now() - round.started);
+    ox.decisionTotal += decisionTime;
+    if (round.truth) {
+        ox.trueTotal += 1;
+        if (correct)
+            ox.trueCorrect += 1;
+    }
+    else {
+        ox.falseTotal += 1;
+        if (correct)
+            ox.falseCorrect += 1;
+    }
+    const buttons = Array.from(byId("screen-ox").querySelectorAll(".ox-button"));
+    const selected = buttons.find((button) => button.classList.contains(answer ? "yes" : "no"));
+    const correctButton = buttons.find((button) => button.classList.contains(round.truth ? "yes" : "no"));
+    buttons.forEach((button) => { button.disabled = true; });
+    selected?.classList.add(correct ? "correct" : "wrong");
+    correctButton?.classList.add("correct");
+    const explanation = round.truth
+        ? "계산하면 " + round.problem.answer + "이므로 맞는 식이에요."
+        : "실제 답은 " + round.problem.answer + "이에요. 함정 유형: " + OX_TRAP_LABELS[round.trap] + ".";
+    if (correct) {
         ox.combo += 1;
         const boost = ox.combo % 5 === 0;
-        const gained = mistakes ? 50 : 100 + (ox.combo - 1) * 10 + (boost ? 250 : 0);
+        const speedBonus = decisionTime < 2000 ? 30 : decisionTime < 3500 ? 15 : 0;
+        const gained = 100 + Math.min(10, ox.combo - 1) * 10 + speedBonus;
         ox.score += gained;
         ox.best = Math.max(ox.best, ox.combo);
         ox.correct += 1;
-        reactOx(true);
-        renderOxBoost();
         if (boost) {
-            byId("oxReaction").textContent = "판단 게이지 완성! 고라파덕 보너스 +250";
+            ox.time = Math.min(70, ox.time + 4);
+            reactOx(true, "혼란 해소! 시간 +4초 · " + explanation);
             pokemonSparkBurst(54);
             playPokemonCry(54);
         }
+        else
+            reactOx(true, "정확한 판단! +" + gained + " · " + explanation);
+        renderOxBoost();
         correctSound();
-        if (mistakes)
-            byId("oxReaction").textContent = "재도전 성공! 판단 점수 +50";
     }
     else {
         ox.combo = 0;
-        renderOxBoost();
-        reactOx(false);
-        const buttons = Array.from(byId("screen-ox").querySelectorAll(".ox-button"));
-        const correctButton = buttons.find((button) => button.classList.contains(ox?.current.truth ? "yes" : "no"));
-        const selected = buttons.find((button) => button.classList.contains(answer ? "yes" : "no"));
-        if (selected && applyChoicePenalty("screen-ox", ".ox-button", selected, correctButton, byId("oxReaction"), "고오스의 방해! 1초 동안 식을 다시 계산해 봐요.", "두 번 틀렸어요. 빛나는 버튼이 정답이에요.")) {
-            renderOxHud();
-            return;
-        }
+        ox.trapMistakes[round.trap] += 1;
         ox.time = Math.max(0, ox.time - 3);
+        renderOxBoost();
+        reactOx(false, "판단 실수로 3초 감소 · " + explanation);
+        wrongSound();
         if (ox.time <= 0) {
             renderOxHud();
             finishOx();
@@ -2426,7 +2529,7 @@ function answerOx(answer) {
             return;
         ox.nextTimer = null;
         nextOx();
-    }, 350);
+    }, correct ? 700 : 1200);
 }
 function renderOxHud() {
     if (!ox)
@@ -2440,10 +2543,15 @@ function finishOx() {
         return;
     const game = ox;
     stopOx();
+    ox = null;
     const stars = game.correct >= 20 ? 3 : game.correct >= 12 ? 2 : game.correct >= 6 ? 1 : 0;
-    saveRecord({ name: getName() || "친구", mode: "ox", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.correct + "개", timestamp: Date.now() });
-    showThemedGameScene("ox", "OX 수업 완료!", game.correct + "개의 문제를 맞혔어요.", 1700);
-    showResult(stars, "고라파덕 참·거짓 OX 완료", game.correct + "개를 맞혔어요.", [[String(game.score), "점수"], [String(game.correct), "정답"], [String(game.best), "최고 연속"], ["60초", "시간"]]);
+    const total = game.trueTotal + game.falseTotal;
+    const averageSeconds = total ? (game.decisionTotal / total / 1000).toFixed(1) : "0.0";
+    const commonTrapEntry = Object.entries(game.trapMistakes).sort((left, right) => right[1] - left[1])[0];
+    const commonTrap = commonTrapEntry && commonTrapEntry[1] > 0 ? OX_TRAP_LABELS[commonTrapEntry[0]] : "함정에 속지 않음";
+    saveRecord({ name: getName() || "친구", mode: "ox", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.correct + "개 · 오류 탐정", timestamp: Date.now() });
+    showThemedGameScene("ox", "오류 탐정 임무 완료!", game.correct + "개의 식을 정확히 판별했어요.", 1700);
+    showResult(stars, "고라파덕 오류 탐정 OX 완료", "가장 주의할 유형: " + commonTrap, [[String(game.score), "점수"], [game.trueCorrect + "/" + game.trueTotal, "맞는 식"], [game.falseCorrect + "/" + game.falseTotal, "틀린 식"], [averageSeconds + "초", "평균 판단"]]);
 }
 let balloon = null;
 const BALLOON_CONFIG = {
@@ -3928,7 +4036,55 @@ const HISTORY_EVENTS = [
     { year: 676, label: "신라가 삼국 통일을 이루었어요", yearLabel: "676년", minGrade: 3 }, { year: 918, label: "왕건이 고려를 세웠어요", yearLabel: "918년", minGrade: 2 },
     { year: 1392, label: "이성계가 조선을 세웠어요", yearLabel: "1392년", minGrade: 2 }, { year: 1443, label: "세종대왕이 훈민정음을 창제했어요", yearLabel: "1443년", minGrade: 0 },
     { year: 1592, label: "임진왜란이 일어났어요", yearLabel: "1592년", minGrade: 3 }, { year: 1919, label: "3·1 운동이 일어났어요", yearLabel: "1919년", minGrade: 3 },
-    { year: 1945, label: "우리나라가 광복을 맞았어요", yearLabel: "1945년", minGrade: 0 }, { year: 1950, label: "6·25 전쟁이 일어났어요", yearLabel: "1950년", minGrade: 4 }
+    { year: 1945, label: "우리나라가 광복을 맞았어요", yearLabel: "1945년", minGrade: 0 }, { year: 1950, label: "6·25 전쟁이 일어났어요", yearLabel: "1950년", minGrade: 4 },
+    { year: -2000, label: "청동으로 도구를 만들고 고인돌을 세우기 시작했어요", yearLabel: "청동기 시대", minGrade: 0 },
+    { year: 612, label: "을지문덕이 살수대첩에서 수나라 군대를 물리쳤어요", yearLabel: "612년", minGrade: 3 },
+    { year: 660, label: "신라와 당의 연합군이 백제를 무너뜨렸어요", yearLabel: "660년", minGrade: 3 },
+    { year: 1446, label: "훈민정음이 세상에 반포되었어요", yearLabel: "1446년", minGrade: 0 },
+    { year: 1894, label: "동학 농민 운동이 일어났어요", yearLabel: "1894년", minGrade: 4 },
+    { year: 1897, label: "고종이 대한제국을 선포했어요", yearLabel: "1897년", minGrade: 4 },
+    { year: 1923, label: "어린이를 위한 어린이날 행사가 시작되었어요", yearLabel: "1923년", minGrade: 0 },
+    { year: 1988, label: "서울에서 하계 올림픽이 열렸어요", yearLabel: "1988년", minGrade: 0 },
+    { year: 372, label: "고구려에 인재를 가르치는 태학이 세워졌어요", yearLabel: "372년", minGrade: 3 },
+    { year: 828, label: "장보고가 청해진을 설치해 바닷길을 지켰어요", yearLabel: "828년", minGrade: 2 },
+    { year: 1019, label: "강감찬이 귀주대첩에서 거란군을 물리쳤어요", yearLabel: "1019년", minGrade: 3 },
+    { year: 1234, label: "고려에서 금속 활자로 책을 인쇄했다는 기록이 남아 있어요", yearLabel: "1234년", minGrade: 4 },
+    { year: 1796, label: "정조 때 수원 화성이 완성되었어요", yearLabel: "1796년", minGrade: 2 },
+    { year: 1909, label: "안중근 의사가 하얼빈에서 의거를 일으켰어요", yearLabel: "1909년", minGrade: 4 },
+    { year: 1948, label: "대한민국 정부가 수립되었어요", yearLabel: "1948년", minGrade: 4 },
+    { year: 2002, label: "대한민국과 일본에서 월드컵이 열렸어요", yearLabel: "2002년", minGrade: 0 },
+    { year: 427, label: "고구려 장수왕이 수도를 평양으로 옮겼어요", yearLabel: "427년", minGrade: 4 },
+    { year: 475, label: "백제가 수도를 웅진으로 옮겼어요", yearLabel: "475년", minGrade: 4 },
+    { year: 527, label: "신라가 불교를 공식적으로 받아들였어요", yearLabel: "527년", minGrade: 3 },
+    { year: 562, label: "신라가 대가야를 병합했어요", yearLabel: "562년", minGrade: 4 },
+    { year: 598, label: "고구려와 수나라의 첫 전쟁이 일어났어요", yearLabel: "598년", minGrade: 4 },
+    { year: 645, label: "고구려가 안시성에서 당나라 군대를 막아냈어요", yearLabel: "645년", minGrade: 3 },
+    { year: 698, label: "대조영이 발해를 세웠어요", yearLabel: "698년", minGrade: 2 },
+    { year: 751, label: "통일 신라에서 불국사를 크게 다시 짓기 시작했어요", yearLabel: "751년", minGrade: 2 },
+    { year: 935, label: "신라가 고려에 항복했어요", yearLabel: "935년", minGrade: 4 },
+    { year: 936, label: "고려가 후삼국을 통일했어요", yearLabel: "936년", minGrade: 3 },
+    { year: 958, label: "고려 광종이 과거제를 실시했어요", yearLabel: "958년", minGrade: 4 },
+    { year: 993, label: "서희의 외교 담판으로 강동 6주를 확보했어요", yearLabel: "993년", minGrade: 3 },
+    { year: 1107, label: "윤관이 별무반을 이끌고 동북 9성을 쌓았어요", yearLabel: "1107년", minGrade: 4 },
+    { year: 1170, label: "고려에서 무신 정변이 일어났어요", yearLabel: "1170년", minGrade: 4 },
+    { year: 1232, label: "고려가 몽골에 맞서 수도를 강화도로 옮겼어요", yearLabel: "1232년", minGrade: 3 },
+    { year: 1251, label: "고려대장경 판목을 새기는 일이 완성되었어요", yearLabel: "1251년", minGrade: 3 },
+    { year: 1270, label: "삼별초가 몽골과의 강화에 반대해 항쟁을 시작했어요", yearLabel: "1270년", minGrade: 5 },
+    { year: 1377, label: "현존하는 가장 오래된 금속 활자본 직지가 인쇄되었어요", yearLabel: "1377년", minGrade: 3 },
+    { year: 1388, label: "이성계가 위화도에서 군대를 돌렸어요", yearLabel: "1388년", minGrade: 4 },
+    { year: 1418, label: "세종이 조선의 왕이 되었어요", yearLabel: "1418년", minGrade: 2 },
+    { year: 1485, label: "조선의 기본 법전인 경국대전이 완성되어 시행되었어요", yearLabel: "1485년", minGrade: 4 },
+    { year: 1597, label: "이순신 장군이 명량대첩에서 승리했어요", yearLabel: "1597년", minGrade: 2 },
+    { year: 1627, label: "후금이 조선을 침략한 정묘호란이 일어났어요", yearLabel: "1627년", minGrade: 4 },
+    { year: 1636, label: "청이 조선을 침략한 병자호란이 일어났어요", yearLabel: "1636년", minGrade: 4 },
+    { year: 1776, label: "정조가 왕이 되고 규장각을 설치했어요", yearLabel: "1776년", minGrade: 3 },
+    { year: 1866, label: "프랑스군이 강화도를 침략한 병인양요가 일어났어요", yearLabel: "1866년", minGrade: 5 },
+    { year: 1876, label: "조선이 일본과 강화도 조약을 맺었어요", yearLabel: "1876년", minGrade: 4 },
+    { year: 1884, label: "개화파가 갑신정변을 일으켰어요", yearLabel: "1884년", minGrade: 5 },
+    { year: 1896, label: "독립협회가 만들어졌어요", yearLabel: "1896년", minGrade: 4 },
+    { year: 1905, label: "일본이 을사늑약을 강제로 맺었어요", yearLabel: "1905년", minGrade: 4 },
+    { year: 1910, label: "일제에 나라를 빼앗겼어요", yearLabel: "1910년", minGrade: 4 },
+    { year: 1920, label: "독립군이 청산리 대첩에서 일본군과 싸워 크게 이겼어요", yearLabel: "1920년", minGrade: 4 }
 ];
 let historyGame = null;
 let historyReviewEvents = null;
@@ -4089,8 +4245,67 @@ const SAFETY_QUESTIONS = [
     { category: "자전거안전", prompt: "자전거를 타고 공원에 나가려고 해요. 꼭 먼저 해야 할 일은?", choices: ["안전모와 보호 장비 착용하기", "속도를 최대한 높이기", "이어폰을 크게 듣기"], answer: 0, explanation: "자전거를 탈 때는 안전모를 쓰고 주변 소리를 들으며 안전하게 이동해요.", minGrade: 0 },
     { category: "폭염안전", prompt: "무더운 날 야외에서 친구가 어지럽다고 해요.", choices: ["그늘로 이동해 쉬고 어른에게 알리기", "계속 뛰게 하기", "두꺼운 옷을 입히기"], answer: 0, explanation: "시원한 곳으로 이동해 쉬게 하고 증상이 계속되면 즉시 도움을 요청해요.", minGrade: 1 },
     { category: "승강기안전", prompt: "엘리베이터 문이 닫히려 할 때 장난감이 안에 떨어졌어요.", choices: ["문에 손을 넣지 않고 어른에게 알리기", "손으로 문을 막기", "문 사이로 뛰어들기"], answer: 0, explanation: "닫히는 문에 손이나 물건을 넣지 말고 관리인이나 어른에게 도움을 요청해요.", minGrade: 1 },
-    { category: "개인정보", prompt: "친구가 보낸 것처럼 보이는 링크에서 비밀번호를 입력하래요.", choices: ["누르지 않고 보호자에게 확인하기", "바로 비밀번호 입력하기", "친구들에게 다시 보내기"], answer: 0, explanation: "의심스러운 링크는 열지 말고 보낸 사람이나 보호자에게 먼저 확인해요.", minGrade: 2 }
+    { category: "개인정보", prompt: "친구가 보낸 것처럼 보이는 링크에서 비밀번호를 입력하래요.", choices: ["누르지 않고 보호자에게 확인하기", "바로 비밀번호 입력하기", "친구들에게 다시 보내기"], answer: 0, explanation: "의심스러운 링크는 열지 말고 보낸 사람이나 보호자에게 먼저 확인해요.", minGrade: 2 },
+    { category: "학교안전", prompt: "계단을 내려갈 때 가장 안전한 행동은 무엇일까요?", choices: ["난간을 잡고 한 칸씩 천천히 내려가기", "친구와 밀치며 빨리 내려가기", "계단에서 뛰어내리기"], answer: 0, explanation: "계단에서는 난간을 잡고 앞을 보며 한 칸씩 이동해야 넘어지지 않아요.", minGrade: 0 },
+    { category: "교통안전", prompt: "통학버스에 타면 가장 먼저 무엇을 해야 할까요?", choices: ["자리에 앉아 안전띠 매기", "버스 안을 돌아다니기", "창문 밖으로 손 내밀기"], answer: 0, explanation: "버스가 출발하기 전에 자리에 바르게 앉아 안전띠를 매야 해요.", minGrade: 0 },
+    { category: "생활안전", prompt: "가위를 친구에게 건넬 때 안전한 방법은 무엇일까요?", choices: ["손잡이가 친구 쪽을 향하도록 건네기", "날 끝을 친구 쪽으로 향해 건네기", "멀리서 던져 주기"], answer: 0, explanation: "가위 날을 닫아 잡고 손잡이가 받는 사람 쪽을 향하도록 천천히 건네요.", minGrade: 0 },
+    { category: "생활안전", prompt: "마트에서 보호자를 잃어버렸을 때 어떻게 해야 할까요?", choices: ["안내 데스크나 직원에게 도움 요청하기", "혼자 밖으로 나가 찾기", "모르는 사람의 차를 타기"], answer: 0, explanation: "그 자리를 함부로 벗어나지 말고 이름표를 단 직원이나 안내 데스크에 도움을 요청해요.", minGrade: 0 },
+    { category: "재난안전", prompt: "밖에서 천둥과 번개가 칠 때 안전한 행동은 무엇일까요?", choices: ["튼튼한 건물 안으로 들어가기", "큰 나무 바로 아래 숨기", "우산을 높이 들고 들판에 서 있기"], answer: 0, explanation: "번개가 칠 때는 나무나 열린 공간에서 벗어나 튼튼한 건물 안으로 이동해요.", minGrade: 1 },
+    { category: "응급상황", prompt: "뜨거운 물에 손을 데었을 때 먼저 해야 할 일은 무엇일까요?", choices: ["흐르는 시원한 물로 식히고 어른에게 알리기", "얼음을 피부에 오래 붙이기", "치약을 바르기"], answer: 0, explanation: "화상 부위를 흐르는 시원한 물로 충분히 식힌 뒤 보호자나 선생님에게 알려요.", minGrade: 1 },
+    { category: "인터넷안전", prompt: "온라인 단체방에서 친구를 놀리는 글이 계속 올라와요.", choices: ["함께 놀리지 않고 증거를 남겨 믿을 만한 어른에게 알리기", "재미있으니 같이 놀리기", "다른 방에도 퍼뜨리기"], answer: 0, explanation: "온라인 괴롭힘에 참여하지 말고 화면을 보관해 보호자나 선생님에게 도움을 요청해요.", minGrade: 2 },
+    { category: "학교안전", prompt: "과학실에서 이름을 모르는 약품을 발견했어요.", choices: ["만지거나 냄새 맡지 않고 선생님께 알리기", "조금 맛보기", "친구 가방에 넣기"], answer: 0, explanation: "과학실 약품은 위험할 수 있으므로 직접 확인하지 말고 선생님의 안내를 받아요.", minGrade: 3 },
+    { category: "놀이안전", prompt: "친구가 그네를 타고 있을 때 안전한 행동은 무엇일까요?", choices: ["그네가 멈출 때까지 떨어져 기다리기", "움직이는 그네 앞으로 지나가기", "그네 줄을 갑자기 잡기"], answer: 0, explanation: "움직이는 그네와 충분히 거리를 두고 완전히 멈춘 뒤 차례를 지켜요.", minGrade: 0 },
+    { category: "승강기안전", prompt: "에스컬레이터를 이용할 때 바른 행동은 무엇일까요?", choices: ["노란 선 안에 서서 손잡이를 잡기", "계단에서 뛰어다니기", "신발 끈을 길게 늘어뜨리기"], answer: 0, explanation: "노란 안전선 안에 서서 손잡이를 잡고, 신발 끈이나 옷자락이 끼지 않게 살펴요.", minGrade: 0 },
+    { category: "생활안전", prompt: "길에서 모르는 동물이 다가올 때 어떻게 해야 할까요?", choices: ["만지지 않고 천천히 거리를 두며 어른에게 알리기", "갑자기 소리치며 쫓아가기", "먹이를 손으로 바로 주기"], answer: 0, explanation: "낯선 동물은 놀라 공격할 수 있으므로 자극하지 말고 안전한 거리를 유지해요.", minGrade: 0 },
+    { category: "가스안전", prompt: "집에서 가스 냄새가 강하게 날 때 어떻게 해야 할까요?", choices: ["전기 스위치를 만지지 말고 밖으로 나가 어른에게 알리기", "불을 켜서 확인하기", "휴대전화 충전기를 꽂기"], answer: 0, explanation: "불꽃이나 전기 스파크가 위험하므로 스위치를 조작하지 말고 안전한 곳에서 도움을 요청해요.", minGrade: 0 },
+    { category: "재난안전", prompt: "폭우로 지하차도에 물이 차오르고 있어요.", choices: ["들어가지 않고 높은 안전한 곳으로 이동하기", "물이 얕아 보이면 건너가기", "사진을 찍으러 가까이 가기"], answer: 0, explanation: "침수된 지하 공간은 물이 빠르게 불어날 수 있으므로 접근하지 말고 높은 곳으로 이동해요.", minGrade: 1 },
+    { category: "생활안전", prompt: "미세먼지가 매우 나쁜 날 외출해야 한다면 어떻게 할까요?", choices: ["보건용 마스크를 바르게 쓰고 오래 밖에 있지 않기", "창문을 모두 열고 달리기", "마스크를 턱에 걸치기"], answer: 0, explanation: "미세먼지가 심한 날에는 외출을 줄이고 필요하면 자신에게 맞는 보건용 마스크를 바르게 써요.", minGrade: 1 },
+    { category: "개인정보", prompt: "모르는 사람이 휴대전화 인증번호를 알려 달라고 해요.", choices: ["절대 알려주지 않고 보호자에게 알리기", "한 번만 알려주기", "온라인 게시판에 올리기"], answer: 0, explanation: "인증번호는 계정이나 결제에 사용될 수 있는 중요한 정보이므로 누구에게도 알려주지 않아요.", minGrade: 2 },
+    { category: "응급상황", prompt: "사람이 쓰러져 불러도 반응하지 않아요. 가장 먼저 할 일은?", choices: ["주변 어른에게 도움을 청하고 119에 신고하기", "물부터 억지로 먹이기", "혼자 옮겨 세우기"], answer: 0, explanation: "반응이 없으면 즉시 주변에 도움을 요청하고 119 상담원의 안내에 따라 행동해요.", minGrade: 3 }
 ];
+const SAFETY_EXTRA_SEEDS = [
+    ["학교안전", "교실 바닥에 물이 쏟아져 미끄러워요.", "친구들이 오지 못하게 알리고 선생님과 함께 닦기", "그대로 두고 뛰어다니기", "물 위에서 미끄럼 놀이하기", "미끄러운 곳을 다른 사람에게 알리고 어른의 도움을 받아 안전하게 정리해요.", 0],
+    ["학교안전", "문을 닫을 때 친구의 손이 문틈 가까이에 있어요.", "잠시 멈추고 손을 치운 뒤 천천히 닫기", "세게 밀어 닫기", "장난으로 여러 번 여닫기", "문틈에 손가락이 끼지 않도록 주변을 확인하고 손잡이를 잡아 천천히 닫아요.", 0],
+    ["학교안전", "높은 책장 위의 물건이 필요해요.", "선생님이나 어른에게 꺼내 달라고 부탁하기", "바퀴 달린 의자 위에 올라가기", "책장을 타고 올라가기", "불안정한 가구에 올라가지 말고 어른에게 도움을 요청해요.", 0],
+    ["운동안전", "체육 활동을 시작하기 전 가장 먼저 할 일은?", "준비운동으로 몸을 천천히 풀기", "바로 가장 빠르게 달리기", "친구를 밀어 출발하기", "준비운동은 근육과 관절을 풀어 운동 중 다칠 위험을 줄여 줘요.", 0],
+    ["놀이안전", "미끄럼틀을 안전하게 이용하는 방법은?", "한 명씩 앉아서 앞을 보고 내려가기", "거꾸로 기어 올라가기", "친구와 동시에 밀며 내려가기", "미끄럼틀에서는 차례를 지키고 정해진 방향으로 한 명씩 이용해요.", 0],
+    ["생활안전", "바닥에서 깨진 유리 조각을 발견했어요.", "손대지 말고 주변에 알린 뒤 어른을 부르기", "맨손으로 바로 줍기", "발로 구석에 밀어 넣기", "깨진 유리는 작은 조각도 위험하므로 가까이 가지 말고 어른에게 알려요.", 0],
+    ["학교안전", "스테이플러를 사용할 때 바른 행동은?", "손가락을 찍는 부분에서 떼고 책상 위에서 누르기", "친구 쪽으로 겨누기", "심이 나오는 곳에 손 넣기", "스테이플러의 심이 나오는 부분에 손을 대지 않고 안정된 곳에서 사용해요.", 1],
+    ["생활안전", "세제와 표백제가 놓여 있어요. 어떻게 해야 할까요?", "서로 섞지 말고 보호자의 안내대로 사용하기", "냄새가 좋게 여러 세제를 섞기", "음료수병에 옮겨 담기", "세제를 섞으면 유독한 기체가 생길 수 있고 다른 용기에 담으면 오인할 수 있어요.", 2],
+    ["주방안전", "전자레인지에 넣으면 안 되는 물건은 무엇일까요?", "금속으로 된 그릇이나 포일", "전자레인지용 그릇", "사용 가능 표시가 있는 용기", "금속은 전자레인지 안에서 불꽃과 화재를 일으킬 수 있어요.", 2],
+    ["주방안전", "냄비를 가스레인지 위에 놓을 때 손잡이는 어떻게 할까요?", "몸이 부딪히지 않도록 안쪽으로 돌려 놓기", "통로 쪽으로 길게 내놓기", "불꽃 바로 위에 놓기", "냄비 손잡이를 안쪽으로 두면 지나가다 부딪혀 뜨거운 내용물이 쏟아지는 사고를 줄여요.", 1],
+    ["전기안전", "전선의 겉이 벗겨져 안쪽이 보여요.", "사용하지 말고 플러그를 만지지 않은 채 어른에게 알리기", "테이프 없이 계속 사용하기", "젖은 손으로 확인하기", "손상된 전선은 감전이나 화재 위험이 있으므로 전원을 다룰 수 있는 어른에게 알려요.", 1],
+    ["전기안전", "하나의 멀티탭에 전열 기구를 많이 꽂으면 왜 위험할까요?", "과열되어 화재가 날 수 있어서", "전기가 더 깨끗해져서", "기구가 가벼워져서", "허용 용량을 넘기면 전선과 멀티탭이 과열될 수 있으므로 문어발식 사용을 피해야 해요.", 3],
+    ["화재안전", "옷에 불이 붙었을 때 알맞은 행동은?", "멈추고 바닥에 엎드려 몸을 굴리기", "바람을 맞으며 뛰기", "옷장 안에 숨기", "뛰면 불길이 더 커질 수 있어 멈추고 엎드려 구르며 불을 꺼야 해요.", 1],
+    ["화재안전", "비상벨을 장난으로 누르면 안 되는 까닭은?", "실제 위험 알림을 방해하고 사람들이 다칠 수 있어서", "소리가 작아져서", "벨 색이 변해서", "거짓 경보는 대피와 구조를 방해하므로 실제 비상 상황에서만 사용해요.", 1],
+    ["화재안전", "낯선 건물에 들어갔을 때 확인하면 좋은 것은?", "비상구와 대피로의 위치", "엘리베이터 장식", "가장 비싼 물건", "미리 비상구 위치를 알아 두면 화재나 재난 때 더 빠르고 안전하게 대피할 수 있어요.", 2],
+    ["교통안전", "주차된 차가 많은 골목길을 걸을 때 어떻게 할까요?", "차가 움직이는지 살피며 가장자리로 천천히 걷기", "차 사이에서 갑자기 뛰어나오기", "휴대전화를 보며 가운데로 걷기", "골목에서는 운전자의 시야가 가릴 수 있어 차의 움직임과 소리를 살펴야 해요.", 0],
+    ["자전거안전", "자전거를 타고 횡단보도를 건널 때 안전한 방법은?", "자전거에서 내려 끌고 건너기", "사람 사이를 빠르게 달리기", "신호가 바뀌기 전에 질주하기", "보행자 횡단보도에서는 자전거에서 내려 주변을 살피며 끌고 건너요.", 1],
+    ["교통안전", "자동차 뒷좌석에 앉았을 때 해야 할 일은?", "몸에 맞게 안전띠를 매기", "누워서 안전띠 풀기", "차가 움직일 때 자리 바꾸기", "앞좌석과 뒷좌석 모두 안전띠를 올바르게 매야 충돌 때 몸을 보호할 수 있어요.", 0],
+    ["교통안전", "버스에서 내린 뒤 길을 건너려면 어떻게 해야 할까요?", "버스가 떠난 뒤 시야가 확보된 곳에서 신호를 확인하기", "버스 바로 앞에서 뛰어 건너기", "버스 뒤에 붙어 건너기", "버스 앞뒤에서는 차량이 서로를 보기 어려우므로 버스가 떠난 뒤 안전하게 건너요.", 1],
+    ["교통안전", "철길 건널목의 경보음이 울리고 차단기가 내려와요.", "멈춰 서서 열차가 지나고 차단기가 올라갈 때까지 기다리기", "차단기 아래로 들어가기", "선로 위에서 사진 찍기", "열차는 빨리 멈출 수 없으므로 경보가 울리면 절대 선로에 들어가지 않아요.", 2],
+    ["겨울안전", "길이 얼어 미끄러울 때 안전하게 걷는 방법은?", "보폭을 줄이고 주머니에서 손을 빼 천천히 걷기", "손을 주머니에 넣고 뛰기", "얼음 위에서 미끄럼 타기", "작은 보폭으로 천천히 걷고 손을 자유롭게 두면 넘어질 때 균형을 잡기 쉬워요.", 0],
+    ["폭염안전", "더운 날 주차된 자동차 안에 혼자 남게 되었어요.", "즉시 차 밖의 안전한 어른에게 도움 요청하기", "창문을 닫고 기다리기", "담요를 덮고 잠자기", "차 안 온도는 매우 빠르게 오르므로 혼자 남아 있지 말고 즉시 도움을 요청해야 해요.", 1],
+    ["지진안전", "운동장처럼 건물 밖에서 지진이 나면 어떻게 할까요?", "건물과 담장에서 떨어져 머리를 보호하기", "건물 벽에 붙어 서기", "전봇대 아래로 가기", "밖에서는 떨어지는 물건을 피해 건물·담장·전봇대에서 멀리 이동해요.", 1],
+    ["재난안전", "바닷가에서 강한 지진을 느낀 뒤 해야 할 행동은?", "해안에서 멀리 떨어진 높은 곳으로 대피하기", "파도를 보러 물가로 가기", "모래사장에 앉아 기다리기", "지진 뒤에는 지진해일이 올 수 있으므로 안내를 기다리지 말고 높은 곳으로 이동해요.", 3],
+    ["재난안전", "큰비가 계속 내리는 산비탈에서 돌이 굴러내려요.", "산비탈과 계곡에서 벗어나 지정된 안전한 곳으로 이동하기", "가까이 가서 살펴보기", "계곡 아래에서 기다리기", "산사태 징후가 보이면 비탈과 계곡을 피해 신속히 대피하고 신고해요.", 3],
+    ["겨울안전", "지붕 끝에 큰 고드름이 매달려 있어요.", "아래로 지나가지 않고 관리하는 어른에게 알리기", "막대기로 바로 떨어뜨리기", "고드름 아래에서 놀기", "고드름이 갑자기 떨어질 수 있으므로 주변을 피하고 안전하게 제거할 수 있는 어른에게 알려요.", 0],
+    ["물놀이", "구명조끼를 바르게 입는 방법은?", "몸에 맞는 크기를 골라 모든 버클과 다리 끈을 잠그기", "큰 것을 걸치기만 하기", "지퍼와 버클을 모두 풀기", "구명조끼가 벗겨지지 않도록 몸에 맞게 조절하고 잠금장치를 모두 채워요.", 1],
+    ["물놀이", "깊이를 모르는 물에 들어가기 전에 해야 할 일은?", "들어가지 말고 안전요원과 깊이 표시를 확인하기", "머리부터 뛰어들기", "친구를 먼저 밀어 넣기", "물의 깊이와 바닥 상태를 모르면 다칠 수 있으므로 반드시 먼저 확인해요.", 1],
+    ["물놀이", "바다에서 물살에 밀려 해변에서 멀어지고 있어요.", "침착하게 구조를 요청하고 물살과 나란한 방향으로 벗어나기", "물살을 정면으로 거슬러 힘껏 헤엄치기", "소리 내지 않고 혼자 버티기", "이안류가 의심되면 체력을 아끼며 구조를 알리고 해안과 평행한 방향으로 빠져나와요.", 4],
+    ["산행안전", "산에서 길을 잃었을 때 알맞은 행동은?", "함부로 이동하지 말고 위치를 알리며 구조 요청하기", "어두워져도 아무 방향으로 달리기", "휴대전화 전원을 계속 켜 둔 채 영상 보기", "위치를 더 잃지 않도록 안전한 곳에 머물며 119에 구조를 요청하고 배터리를 아껴요.", 3],
+    ["식품안전", "음식 알레르기가 있다면 포장 식품에서 무엇을 확인할까요?", "알레르기 유발 성분 표시", "포장 색깔만", "광고 모델 이름", "알레르기 유발 재료가 들어 있는지 성분 표시를 확인하고 모르면 먹지 않아요.", 2],
+    ["약물안전", "처방받은 약을 먹을 때 지켜야 할 것은?", "정해진 사람과 시간과 용량에 맞게 먹기", "증상이 비슷한 친구와 나누기", "효과를 빨리 보려고 두 배로 먹기", "약은 처방받은 사람이 안내된 시간과 용량에 맞게 복용해야 해요.", 2],
+    ["응급상황", "코피가 날 때 바른 응급 처치는?", "고개를 조금 숙이고 콧방울을 눌러 지혈하기", "고개를 뒤로 젖혀 피를 삼키기", "코를 세게 풀기", "몸을 앞으로 약간 숙이고 부드러운 코 부분을 일정 시간 눌러요.", 2],
+    ["응급상황", "친구가 음식을 먹다 목을 잡고 숨쉬기 힘들어해요.", "즉시 주변에 알리고 119에 신고해 안내를 따르기", "물을 억지로 많이 먹이기", "혼자 조용히 기다리기", "기도가 막힌 것으로 보이면 즉시 도움과 119를 요청하고 안내에 따라 응급 처치를 해요.", 3],
+    ["응급상황", "동물에게 물려 피부에 상처가 났어요.", "안전한 곳에서 흐르는 물로 씻고 어른과 의료기관에 알리기", "흙을 바르기", "상처를 숨기기", "동물에게 물린 상처는 감염 위험이 있어 씻은 뒤 반드시 어른과 의료진에게 알려요.", 2],
+    ["인터넷안전", "온라인에서 알게 된 사람이 직접 만나자고 해요.", "혼자 만나지 말고 보호자에게 알리기", "아무도 모르게 약속 장소에 가기", "집 주소부터 보내기", "온라인 상대의 신원을 확신할 수 없으므로 혼자 만나지 않고 보호자와 상의해요.", 2],
+    ["인터넷안전", "길에 붙은 출처를 모르는 QR 코드를 발견했어요.", "함부로 스캔하지 않고 공식 안내인지 확인하기", "바로 스캔해 앱 설치하기", "개인정보를 모두 입력하기", "출처가 불분명한 QR 코드는 악성 사이트로 연결될 수 있어 확인 없이 열지 않아요.", 3],
+    ["인터넷안전", "공공 와이파이에서 중요한 결제를 해야 해요.", "안전한 개인 통신망에서 나중에 이용하기", "보안 표시 없이 바로 결제하기", "비밀번호를 메모장에 공개하기", "공공 와이파이는 정보가 노출될 수 있어 금융 거래와 중요한 로그인을 피하는 것이 안전해요.", 4],
+    ["학교안전", "친구가 괴롭힘을 당하는 모습을 보았어요.", "안전하게 도움을 요청하고 선생님에게 사실대로 알리기", "함께 놀리기", "영상만 찍어 퍼뜨리기", "혼자 위험하게 개입하기보다 믿을 만한 어른에게 즉시 알려 피해 친구를 도와요.", 1],
+    ["과학실안전", "실험 중 유리 기구가 깨졌어요.", "손대지 말고 친구들이 접근하지 않게 한 뒤 선생님께 알리기", "맨손으로 조각을 모으기", "깨진 조각을 가방에 넣기", "깨진 실험 기구는 날카롭거나 약품이 묻었을 수 있어 선생님이 안전하게 처리해야 해요.", 2]
+];
+SAFETY_QUESTIONS.push(...SAFETY_EXTRA_SEEDS.map(([category, prompt, correct, wrong1, wrong2, explanation, minGrade]) => ({ category, prompt, choices: [correct, wrong1, wrong2], answer: 0, explanation, minGrade })));
 let safety = null;
 let safetyReviewQuestions = null;
 function stopSafety() { if (safety)
@@ -4304,10 +4519,168 @@ const KNOWLEDGE_QUESTIONS = [
     { category: "과학", prompt: "생태계에서 생산자에 해당하는 것은 무엇일까요?", choices: ["풀", "토끼", "매", "버섯"], answer: 0, explanation: "풀과 같은 식물은 광합성으로 스스로 양분을 만드는 생산자예요.", minGrade: 5, maxGrade: 6, tier: 3 },
     { category: "사회", prompt: "정부의 권력을 입법·행정·사법으로 나누는 까닭은 무엇일까요?", choices: ["권력의 집중과 남용을 막기 위해", "결정을 모두 늦추기 위해", "선거를 없애기 위해", "법을 비밀로 하기 위해"], answer: 0, explanation: "삼권 분립은 국가 기관이 서로 견제하고 균형을 이루도록 해 국민의 권리를 보호해요.", minGrade: 5, maxGrade: 6, tier: 3 },
     { category: "역사", prompt: "서로 다른 역사 자료의 설명이 다를 때 바람직한 태도는?", choices: ["여러 자료의 관점과 근거를 비교하기", "먼저 본 것만 믿기", "모두 거짓이라 하기", "유명한 사람 말만 믿기"], answer: 0, explanation: "자료마다 만든 사람과 목적이 다를 수 있으므로 여러 근거를 교차 확인해야 해요.", minGrade: 5, maxGrade: 6, tier: 3 },
-    { category: "생활", prompt: "저작권을 지키며 인터넷 자료를 사용하는 방법은?", choices: ["이용 조건을 확인하고 출처를 밝히기", "검색되면 마음대로 쓰기", "만든 사람 이름 지우기", "유료 자료를 공유하기"], answer: 0, explanation: "자료의 라이선스와 이용 범위를 확인하고 필요한 경우 허락을 받은 뒤 출처를 표시해요.", minGrade: 5, maxGrade: 6, tier: 3 }
+    { category: "생활", prompt: "저작권을 지키며 인터넷 자료를 사용하는 방법은?", choices: ["이용 조건을 확인하고 출처를 밝히기", "검색되면 마음대로 쓰기", "만든 사람 이름 지우기", "유료 자료를 공유하기"], answer: 0, explanation: "자료의 라이선스와 이용 범위를 확인하고 필요한 경우 허락을 받은 뒤 출처를 표시해요.", minGrade: 5, maxGrade: 6, tier: 3 },
+    { category: "과학", prompt: "빈 컵을 물속에 거꾸로 넣으면 컵 안에 물이 잘 들어가지 않는 까닭은?", choices: ["컵 안의 공기가 자리를 차지하고 있어서", "컵이 물을 무서워해서", "물이 항상 아래로만 가서", "컵이 너무 가벼워서"], answer: 0, explanation: "눈에 보이지 않는 공기도 공간을 차지하므로 물이 들어갈 자리를 막아요.", minGrade: 0, maxGrade: 2, tier: 1 },
+    { category: "과학", prompt: "씨앗이 싹트는 데 필요한 조건으로 가장 알맞은 것은?", choices: ["알맞은 물과 공기와 온도", "아주 밝은 전등만", "색종이와 풀", "차가운 얼음만"], answer: 0, explanation: "씨앗이 싹트려면 알맞은 양의 물과 공기, 적당한 온도가 필요해요.", minGrade: 0, maxGrade: 2, tier: 2 },
+    { category: "사회", prompt: "우리 동네에서 위험한 일을 막고 질서를 지키는 곳은 어디일까요?", choices: ["경찰서", "미술관", "빵집", "문구점"], answer: 0, explanation: "경찰서는 주민의 안전을 지키고 범죄나 사고에 대응하는 공공 기관이에요.", minGrade: 0, maxGrade: 2, tier: 1 },
+    { category: "사회", prompt: "공원에서 차례와 규칙을 지켜야 하는 까닭은 무엇일까요?", choices: ["모두가 안전하고 즐겁게 이용하려고", "혼자만 먼저 놀려고", "놀이기구를 숨기려고", "공원을 빨리 닫으려고"], answer: 0, explanation: "공공장소의 약속은 여러 사람이 안전하고 편리하게 이용하도록 도와줘요.", minGrade: 0, maxGrade: 2, tier: 2 },
+    { category: "역사", prompt: "오래된 사진과 일기가 소중한 까닭은 무엇일까요?", choices: ["옛날 사람들의 생활을 알려 주어서", "항상 새것이어서", "그림이 모두 같아서", "날씨를 바꾸어 주어서"], answer: 0, explanation: "옛 사진과 일기는 당시 사람들의 생활과 생각을 살펴볼 수 있는 역사 자료예요.", minGrade: 0, maxGrade: 2, tier: 1 },
+    { category: "역사", prompt: "문화유산을 관람할 때 바른 행동은 무엇일까요?", choices: ["만지지 않고 안내에 따라 살펴보기", "이름을 새겨 두기", "몰래 가져오기", "큰 소리로 뛰어다니기"], answer: 0, explanation: "문화유산이 훼손되지 않도록 관람 규칙을 지키며 소중히 살펴봐야 해요.", minGrade: 0, maxGrade: 2, tier: 2 },
+    { category: "생활", prompt: "종이 상자를 재활용함에 넣기 전에 하면 좋은 일은?", choices: ["테이프와 이물질을 떼고 펼치기", "음식물을 넣어 접기", "물을 가득 묻히기", "비닐봉지에 섞어 넣기"], answer: 0, explanation: "종이는 테이프와 이물질을 제거하고 펼쳐서 종류에 맞게 분리배출해요.", minGrade: 0, maxGrade: 2, tier: 1 },
+    { category: "생활", prompt: "기침이나 재채기가 나올 때 바른 행동은 무엇일까요?", choices: ["옷소매로 입과 코 가리기", "친구 얼굴 쪽으로 하기", "손으로 막고 바로 악수하기", "아무 데나 침 뱉기"], answer: 0, explanation: "옷소매로 입과 코를 가리면 침방울이 주변으로 퍼지는 것을 줄일 수 있어요.", minGrade: 0, maxGrade: 2, tier: 2 },
+    { category: "과학", prompt: "전구에 불이 켜지게 하려면 전지와 전구를 어떻게 연결해야 할까요?", choices: ["전기가 흐르는 닫힌 회로로 연결하기", "전선 한쪽만 연결하기", "전지를 멀리 놓기", "전구를 종이로 감싸기"], answer: 0, explanation: "전지의 양쪽 극과 전구가 끊김 없는 닫힌 회로로 연결되어야 전류가 흘러요.", minGrade: 3, maxGrade: 4, tier: 1 },
+    { category: "과학", prompt: "차가운 컵의 바깥쪽에 물방울이 생기는 까닭은 무엇일까요?", choices: ["공기 중 수증기가 차가워져 물이 되어서", "컵 안의 물이 유리를 통과해서", "컵이 물을 만들어서", "햇빛이 얼음으로 변해서"], answer: 0, explanation: "공기 중의 수증기가 차가운 컵 표면에서 식어 액체 물방울로 응결해요.", minGrade: 3, maxGrade: 4, tier: 2 },
+    { category: "사회", prompt: "동네에 새 도서관을 지을 장소를 정하는 바람직한 방법은?", choices: ["주민의 의견을 듣고 함께 논의하기", "한 사람이 몰래 정하기", "의견을 말한 사람을 혼내기", "규칙 없이 제비만 뽑기"], answer: 0, explanation: "지역의 공공 문제는 다양한 주민의 의견을 듣고 민주적인 절차로 결정해야 해요.", minGrade: 3, maxGrade: 4, tier: 2 },
+    { category: "사회", prompt: "필요한 물건을 알맞게 고르는 소비 습관은 무엇일까요?", choices: ["필요성과 가격과 품질을 비교하기", "광고만 보고 바로 사기", "가장 비싼 것만 고르기", "친구가 산 것은 모두 사기"], answer: 0, explanation: "물건이 정말 필요한지 생각하고 가격과 품질을 비교하면 합리적으로 소비할 수 있어요.", minGrade: 3, maxGrade: 4, tier: 2 },
+    { category: "역사", prompt: "금속 활자가 책을 만드는 데 준 도움은 무엇일까요?", choices: ["글자를 다시 사용해 여러 책을 찍기 편리해졌어요", "책을 모두 손으로만 쓰게 했어요", "글자를 읽지 못하게 했어요", "종이를 사용하지 않게 했어요"], answer: 0, explanation: "금속으로 만든 활자는 오래 쓰고 다시 배열할 수 있어 책을 인쇄하는 데 도움이 되었어요.", minGrade: 3, maxGrade: 4, tier: 2 },
+    { category: "역사", prompt: "조선왕조실록에는 주로 무엇이 기록되어 있을까요?", choices: ["조선 왕과 나라에서 있었던 중요한 일", "미래의 날씨만", "외국 동화만", "요리 재료만"], answer: 0, explanation: "조선왕조실록은 조선 시대 왕의 활동과 정치·사회에서 있었던 일을 기록한 자료예요.", minGrade: 3, maxGrade: 4, tier: 2 },
+    { category: "생활", prompt: "안전한 비밀번호를 만드는 방법은 무엇일까요?", choices: ["개인정보를 피하고 문자·숫자·기호를 섞기", "생일 네 자리만 쓰기", "모든 사이트에 1234 쓰기", "친구에게 알려 주기"], answer: 0, explanation: "추측하기 어려운 비밀번호를 만들고 서비스마다 다르게 사용해야 계정을 보호할 수 있어요.", minGrade: 3, maxGrade: 4, tier: 1 },
+    { category: "생활", prompt: "상품에 당첨되었다며 주소를 입력하라는 낯선 링크가 왔어요.", choices: ["링크를 누르지 않고 공식 연락처로 확인하기", "주소와 비밀번호 입력하기", "친구에게 바로 전달하기", "앱을 모두 설치하기"], answer: 0, explanation: "뜻밖의 당첨 메시지는 사기일 수 있으므로 링크를 열지 말고 공식 채널에서 확인해요.", minGrade: 3, maxGrade: 4, tier: 2 },
+    { category: "과학", prompt: "계속 사용할 수 있는 재생 가능 에너지는 무엇일까요?", choices: ["태양 에너지와 바람 에너지", "석탄과 석유", "휘발유와 경유", "천연가스와 석탄"], answer: 0, explanation: "태양과 바람은 자연에서 다시 얻을 수 있어 재생 가능 에너지원으로 활용돼요.", minGrade: 5, maxGrade: 6, tier: 1 },
+    { category: "과학", prompt: "걸을 때 미끄러지지 않고 앞으로 나아갈 수 있게 돕는 힘은?", choices: ["발과 땅 사이의 마찰력", "중력만", "자기력만", "부력만"], answer: 0, explanation: "발이 땅을 뒤로 밀 때 마찰력이 발을 앞으로 밀어 주어 걸을 수 있어요.", minGrade: 5, maxGrade: 6, tier: 2 },
+    { category: "사회", prompt: "국민이 낸 세금은 주로 어디에 사용될까요?", choices: ["학교·도로·소방 같은 공공 서비스", "한 사람의 장난감 구입", "비밀 선물 구입", "개인의 용돈 지급"], answer: 0, explanation: "세금은 교육, 교통, 안전 등 사회 구성원에게 필요한 공공 서비스를 운영하는 데 쓰여요.", minGrade: 5, maxGrade: 6, tier: 1 },
+    { category: "사회", prompt: "헌법에 대한 설명으로 가장 알맞은 것은?", choices: ["국민의 기본권과 국가 운영 원칙을 정한 가장 높은 법", "학교 한 반의 약속만 정한 글", "가게 가격표를 정한 규칙", "운동 경기의 점수표"], answer: 0, explanation: "헌법은 국민의 기본권을 보장하고 국가 기관의 구성과 운영 원칙을 정하는 최고 법이에요.", minGrade: 5, maxGrade: 6, tier: 2 },
+    { category: "역사", prompt: "698년에 발해를 세운 인물은 누구일까요?", choices: ["대조영", "왕건", "이성계", "장보고"], answer: 0, explanation: "대조영은 고구려 유민과 말갈인들을 이끌어 발해를 세웠어요.", minGrade: 5, maxGrade: 6, tier: 1 },
+    { category: "역사", prompt: "독립운동 당시의 편지와 신문을 연구하는 까닭은 무엇일까요?", choices: ["그 시대 사람들의 생각과 상황을 이해하려고", "글씨 크기만 재려고", "종이 가격만 알려고", "미래 사건을 맞히려고"], answer: 0, explanation: "당시에 만든 편지와 신문은 독립운동가와 사람들의 생각, 시대 상황을 보여 주는 1차 자료예요.", minGrade: 5, maxGrade: 6, tier: 2 },
+    { category: "생활", prompt: "사실처럼 보이는 의심스러운 영상이 빠르게 퍼지고 있어요.", choices: ["원본과 출처를 확인한 뒤 공유 여부를 판단하기", "제목만 보고 바로 퍼뜨리기", "조회 수가 많으니 믿기", "친구 이름으로 다시 올리기"], answer: 0, explanation: "조작된 영상일 수 있으므로 공식 자료와 원본 출처를 확인하기 전에는 공유하지 않아요.", minGrade: 5, maxGrade: 6, tier: 2 },
+    { category: "생활", prompt: "새 앱이 사진·위치·연락처 권한을 모두 요구해요.", choices: ["기능에 꼭 필요한 권한인지 확인하고 최소한만 허용하기", "모든 권한을 무조건 허용하기", "비밀번호도 함께 보내기", "사용하지 않아도 계속 위치를 공유하기"], answer: 0, explanation: "앱의 기능과 관계없는 권한은 거부하고 개인정보 접근 권한을 주기적으로 확인해요.", minGrade: 5, maxGrade: 6, tier: 2 }
 ];
+const KNOWLEDGE_EXTRA_SEEDS = [
+    // 1~2학년: 과학
+    ["과학", "자석에 붙는 물건은 무엇일까요?", "철로 만든 클립", "나무젓가락", "고무지우개", "종이컵", "철로 된 물체는 자석에 잘 붙어요.", 0, 2, 1],
+    ["과학", "낮에 주변을 밝게 비추는 것은 무엇일까요?", "태양", "달", "별똥별", "가로등만", "태양은 낮 동안 지구에 빛과 열을 보내요.", 0, 2, 1],
+    ["과학", "달이 밤에 밝게 보이는 까닭은?", "태양빛을 반사해서", "스스로 불타서", "전구가 들어 있어서", "별빛을 먹어서", "달은 태양빛을 받아 반사해 밝게 보여요.", 0, 2, 2],
+    ["과학", "소리를 들을 때 사용하는 감각 기관은?", "귀", "코", "혀", "피부", "귀는 공기의 떨림인 소리를 느껴요.", 0, 2, 1],
+    ["과학", "물고기가 살기에 알맞은 곳은?", "물속", "마른 사막", "나무 꼭대기", "구름 위", "물고기는 아가미로 물속의 산소를 얻어요.", 0, 2, 1],
+    ["과학", "물이 얼면 무엇이 될까요?", "얼음", "수증기", "모래", "바람", "물은 차가워져 어는점에 이르면 고체인 얼음이 돼요.", 0, 2, 1],
+    ["과학", "구름 속 작은 물방울이 무거워져 떨어지는 것은?", "비", "바람", "햇빛", "안개만", "구름의 물방울이 커지고 무거워지면 비로 내려요.", 0, 2, 2],
+    ["과학", "그림자가 생기려면 필요한 것은?", "빛과 빛을 막는 물체", "소리와 냄새", "물과 설탕", "바람과 모래", "물체가 빛을 막으면 반대쪽에 그림자가 생겨요.", 0, 2, 2],
+    ["과학", "문을 앞으로 밀어 여는 것은 어떤 힘일까요?", "미는 힘", "당기는 힘", "자기력만", "부력", "물체를 멀어지게 움직일 때 미는 힘을 사용해요.", 0, 2, 1],
+    ["과학", "추운 겨울에 알맞은 옷은 무엇일까요?", "두꺼운 외투", "얇은 수영복", "민소매 한 장", "물에 젖은 옷", "두꺼운 옷은 몸의 열이 빠져나가는 것을 줄여요.", 0, 2, 1],
+    // 1~2학년: 사회
+    ["사회", "우리 지역의 여러 일을 맡아보는 곳은?", "시청이나 군청", "영화관", "놀이공원", "빵집", "시청과 군청은 주민 생활에 필요한 행정 업무를 해요.", 0, 2, 2],
+    ["사회", "편지와 소포를 보내고 받는 곳은?", "우체국", "소방서", "박물관", "체육관", "우체국은 우편물과 소포를 전달해요.", 0, 2, 1],
+    ["사회", "아픈 사람을 진료하고 치료하는 곳은?", "병원", "도서관", "시장", "공원", "병원에서는 의료진이 환자를 진료하고 치료해요.", 0, 2, 1],
+    ["사회", "물건을 사고파는 일이 이루어지는 곳은?", "시장", "교실", "놀이터", "수영장", "시장에서는 생산자와 소비자가 물건과 서비스를 거래해요.", 0, 2, 1],
+    ["사회", "교실 규칙을 함께 정하면 좋은 점은?", "모두가 지키기 쉬워요", "한 명만 편해요", "규칙이 없어져요", "의견을 말할 수 없어요", "함께 의견을 내어 정한 규칙은 이유를 이해하고 실천하기 쉬워요.", 0, 2, 2],
+    ["사회", "지도에서 기호의 뜻을 알려 주는 것은?", "범례", "제목만", "사진", "페이지 번호", "범례는 지도에 쓰인 색과 기호의 뜻을 설명해요.", 0, 2, 2],
+    ["사회", "빨간 교통 신호가 켜지면 어떻게 해야 할까요?", "멈춰서 기다려요", "빨리 건너요", "뒤로 뛰어요", "차도로 걸어요", "빨간불은 멈춤을 뜻하므로 안전선 뒤에서 기다려요.", 0, 2, 1],
+    ["사회", "공원 벤치 같은 공공 물건은 어떻게 써야 할까요?", "깨끗하고 조심히 함께 써요", "낙서해요", "혼자 가져가요", "일부러 망가뜨려요", "공공시설은 모두의 것이므로 아껴 써야 해요.", 0, 2, 1],
+    ["사회", "가족이 집안일을 나누어 하면 좋은 점은?", "서로 돕고 함께 책임질 수 있어요", "한 명만 계속 힘들어요", "집안일이 늘어나요", "대화를 못 해요", "가족 구성원이 역할을 나누면 서로 배려하고 협력할 수 있어요.", 0, 2, 2],
+    ["사회", "거리를 깨끗하게 관리하는 일을 하는 분은?", "환경미화원", "우주비행사", "화가", "마술사", "환경미화원은 거리의 쓰레기를 수거하고 환경을 깨끗하게 지켜요.", 0, 2, 1],
+    // 1~2학년: 역사
+    ["역사", "일어난 일을 가장 먼저부터 차례로 나타내는 것은?", "시간의 순서", "자리의 크기", "색깔의 순서", "키의 순서", "역사는 사건이 일어난 앞뒤 순서를 살피는 것이 중요해요.", 0, 2, 1],
+    ["역사", "옛날 물건을 안전하게 보관하고 보여 주는 곳은?", "박물관", "동물원", "수영장", "정류장", "박물관은 역사 자료와 유물을 보존하고 전시해요.", 0, 2, 1],
+    ["역사", "옛사람이 남긴 그릇이나 도구를 무엇이라 할까요?", "유물", "날씨", "약속", "동화", "유물은 과거 사람들이 만들고 사용한 물건이에요.", 0, 2, 2],
+    ["역사", "옛날 왕이 살며 나라의 일을 보던 곳은?", "궁궐", "공항", "아파트", "운동장", "궁궐은 왕과 왕실이 생활하고 정치를 하던 곳이에요.", 0, 2, 1],
+    ["역사", "우리 조상이 명절에 입던 전통 옷은?", "한복", "우주복", "잠수복", "교복", "한복은 우리나라의 대표적인 전통 의복이에요.", 0, 2, 1],
+    ["역사", "옛날 농기구를 살펴보면 알 수 있는 것은?", "당시 농사짓던 모습", "내일의 날씨", "미래의 자동차", "다른 별의 크기", "생활 도구는 당시 사람들의 일과 기술을 보여 줘요.", 0, 2, 2],
+    ["역사", "할머니와 할아버지의 어린 시절을 알아보는 방법은?", "이야기를 듣고 사진을 살펴보기", "상상만 하기", "오늘 뉴스만 보기", "미래 달력 보기", "경험자의 이야기와 옛 사진은 가까운 과거를 알려 주는 자료예요.", 0, 2, 2],
+    ["역사", "광복절은 무엇을 기념하는 날일까요?", "나라를 되찾은 날", "한글을 만든 날", "새해 첫날", "어린이날", "8월 15일 광복절은 일제의 지배에서 벗어난 것을 기념해요.", 0, 2, 2],
+    ["역사", "우리나라를 나타내는 국기의 이름은?", "태극기", "무궁화", "애국가", "한글", "태극기는 우리나라의 국기이며 역사 속에서 나라를 나타내 왔어요.", 0, 2, 1],
+    ["역사", "세종대왕이 만든 새 글자의 처음 이름은?", "훈민정음", "삼국사기", "팔만대장경", "동의보감", "훈민정음은 백성을 가르치는 바른 소리라는 뜻이에요.", 0, 2, 2],
+    // 1~2학년: 생활
+    ["생활", "손을 깨끗이 씻는 가장 좋은 방법은?", "비누로 손바닥과 손가락 사이까지 씻기", "물에 손끝만 대기", "옷에 닦기", "흙으로 문지르기", "비누로 손의 여러 부분을 꼼꼼히 씻으면 오염물을 줄일 수 있어요.", 0, 2, 1],
+    ["생활", "이를 건강하게 지키는 습관은?", "식사 뒤 꼼꼼히 양치하기", "사탕을 먹고 바로 자기", "칫솔을 함께 쓰기", "이를 닦지 않기", "올바른 양치는 충치를 일으키는 음식 찌꺼기와 세균막을 없애요.", 0, 2, 1],
+    ["생활", "건강한 식사 방법은 무엇일까요?", "여러 종류의 음식을 골고루 먹기", "과자만 먹기", "채소는 모두 빼기", "한 가지 음식만 먹기", "다양한 식품을 골고루 먹어야 필요한 영양소를 얻을 수 있어요.", 0, 2, 1],
+    ["생활", "몸과 뇌가 충분히 쉬려면 필요한 것은?", "규칙적이고 충분한 잠", "밤새 게임하기", "매일 늦게 자기", "잠을 계속 줄이기", "충분한 수면은 성장과 기억, 건강에 도움을 줘요.", 0, 2, 1],
+    ["생활", "화면을 오래 본 뒤 눈을 쉬게 하는 방법은?", "먼 곳을 보며 잠시 쉬기", "화면을 더 가까이 보기", "불을 끄고 계속 보기", "눈을 비비며 보기", "중간중간 먼 곳을 바라보면 가까운 곳을 보던 눈의 피로를 줄여요.", 0, 2, 2],
+    ["생활", "빈 페트병을 분리배출하기 전에 할 일은?", "내용물을 비우고 깨끗이 헹구기", "음식물을 채우기", "종이와 섞기", "뚜껑을 열어 둔 채 길에 놓기", "재활용품은 내용물을 비우고 헹군 뒤 지역 기준에 맞게 분리해요.", 0, 2, 2],
+    ["생활", "양치할 때 물을 아끼는 방법은?", "컵을 쓰고 수도꼭지를 잠그기", "물을 계속 틀어 두기", "물을 바닥에 뿌리기", "수도꼭지를 더 크게 열기", "사용하지 않는 동안 물을 잠그면 소중한 물을 아낄 수 있어요.", 0, 2, 1],
+    ["생활", "친구에게 실수했을 때 바른 행동은?", "잘못을 인정하고 진심으로 사과하기", "모른 척하기", "친구 탓만 하기", "소문내기", "자신의 행동을 설명하고 사과한 뒤 고치려는 태도가 필요해요.", 0, 2, 2],
+    ["생활", "온라인에서 이름과 주소를 물으면 어떻게 할까요?", "알려주지 않고 보호자에게 묻기", "모두 공개하기", "사진까지 보내기", "비밀번호도 알려주기", "개인정보는 믿을 수 있는 보호자의 확인 없이 공개하면 안 돼요.", 0, 2, 1],
+    ["생활", "위험한 일을 당해 경찰의 도움이 필요할 때 전화번호는?", "112", "119", "114", "120", "범죄 신고와 긴급한 경찰 도움은 112로 요청해요.", 0, 2, 1],
+    // 3~4학년: 과학
+    ["과학", "물이 얼어 얼음이 되는 상태 변화는?", "응고", "융해", "증발", "응결", "액체가 고체로 변하는 현상을 응고라고 해요.", 3, 4, 1],
+    ["과학", "젖은 빨래가 마르는 까닭은?", "물이 증발해서", "물이 얼어서", "천이 물을 먹어서", "바람이 색을 지워서", "빨래의 물이 수증기로 변해 공기 중으로 이동해요.", 3, 4, 1],
+    ["과학", "소리의 높낮이를 바꾸는 것과 관계 깊은 것은?", "물체의 진동 빠르기", "물체의 색", "방의 넓이만", "냄새의 세기", "빠르게 진동할수록 일반적으로 높은 소리가 나요.", 3, 4, 2],
+    ["과학", "거울에 모습이 보이는 까닭은?", "빛이 반사되어 눈에 들어와서", "거울이 그림을 그려서", "소리가 튕겨서", "공기가 멈춰서", "물체의 빛이 거울에서 반사되어 눈에 도달해요.", 3, 4, 1],
+    ["과학", "막대자석의 같은 극끼리 가까이 하면?", "서로 밀어내요", "서로 붙어요", "모두 녹아요", "빛이 나요", "자석의 같은 극은 밀어내고 다른 극은 끌어당겨요.", 3, 4, 1],
+    ["과학", "먹이사슬에서 풀을 먹는 토끼는?", "초식 동물", "생산자", "분해자만", "무생물", "토끼는 식물을 먹어 에너지를 얻는 초식 동물이에요.", 3, 4, 2],
+    ["과학", "식물의 줄기가 하는 일은?", "물질을 운반하고 몸을 지탱해요", "흙을 만들어요", "소리를 들어요", "씨앗을 먹어요", "줄기는 뿌리와 잎 사이에서 물질을 운반하고 식물을 세워요.", 3, 4, 2],
+    ["과학", "달 표면에 둥근 구덩이가 많은 까닭은?", "운석이 충돌해서", "비가 많이 내려서", "나무뿌리가 파서", "바닷물이 흘러서", "대기가 거의 없는 달에는 충돌 흔적인 크레이터가 오래 남아요.", 3, 4, 2],
+    ["과학", "풍선을 누르면 모양이 변하는 까닭은?", "공기가 압력을 전달해서", "공기가 사라져서", "고무가 물이 돼서", "빛이 밀어서", "갇힌 공기는 힘을 받으면 압력을 여러 방향으로 전달해요.", 3, 4, 2],
+    ["과학", "모래와 물을 분리할 때 알맞은 방법은?", "거름 장치로 거르기", "자석만 사용하기", "모두 끓여 태우기", "설탕 넣기", "물에 녹지 않는 모래는 거름종이로 걸러낼 수 있어요.", 3, 4, 2],
+    // 3~4학년: 사회
+    ["사회", "우리나라의 가장 큰 행정 구역 단위에 해당하는 것은?", "특별시·광역시·도", "반", "모둠", "번지", "우리나라는 특별시, 광역시, 특별자치시, 도 등으로 나뉘어요.", 3, 4, 1],
+    ["사회", "해가 뜨는 쪽을 나타내는 방위는?", "동쪽", "서쪽", "남쪽", "북쪽", "해는 대체로 동쪽에서 떠서 서쪽으로 져요.", 3, 4, 1],
+    ["사회", "지도에서 실제 거리를 줄인 정도는?", "축척", "범례", "등고선", "제목", "축척을 이용하면 지도 위 거리와 실제 거리의 관계를 알 수 있어요.", 3, 4, 2],
+    ["사회", "주민등록이나 복지 업무를 가까이서 처리하는 곳은?", "행정복지센터", "놀이공원", "백화점", "극장", "행정복지센터는 주민에게 필요한 여러 행정 서비스를 제공해요.", 3, 4, 1],
+    ["사회", "물건을 만들어 파는 사람은?", "생산자", "소비자만", "관람객", "승객", "생산자는 재화나 서비스를 만들어 시장에 제공해요.", 3, 4, 1],
+    ["사회", "용돈을 계획적으로 쓰려면 먼저 할 일은?", "수입과 지출 계획 세우기", "원하는 것을 모두 사기", "기록하지 않기", "저축을 모두 쓰기", "예산을 세우면 필요한 지출과 저축을 미리 정할 수 있어요.", 3, 4, 2],
+    ["사회", "지역 축제를 조사하면 알 수 있는 것은?", "지역의 문화와 특색", "지구의 자전 속도", "바닷물 깊이만", "외국의 법만", "축제에는 지역의 역사, 산업, 생활 모습이 담겨 있어요.", 3, 4, 2],
+    ["사회", "사람이 만든 다리와 도로는 어떤 환경일까요?", "인문 환경", "자연 환경", "우주 환경", "기후만", "건물과 도로처럼 사람이 만든 환경을 인문 환경이라고 해요.", 3, 4, 1],
+    ["사회", "비밀 투표를 하는 까닭은?", "다른 압력 없이 뜻을 표현하려고", "결과를 숨기려고", "한 명이 두 번 뽑으려고", "후보를 없애려고", "비밀 투표는 유권자가 자유롭게 선택하도록 보호해요.", 3, 4, 2],
+    ["사회", "권리와 함께 책임도 필요한 까닭은?", "서로의 권리를 존중해야 해서", "나만 편하면 되어서", "규칙을 없애려고", "의견을 막으려고", "자신의 권리를 누릴 때 다른 사람의 권리도 존중해야 해요.", 3, 4, 2],
+    // 3~4학년: 역사
+    ["역사", "고인돌이 많이 만들어진 시대는?", "청동기 시대", "구석기 시대", "조선 시대", "현대", "고인돌은 청동기 시대의 대표적인 무덤이에요.", 3, 4, 1],
+    ["역사", "고구려·백제·신라를 함께 부르는 말은?", "삼국", "후삼국", "남북국", "열국", "세 나라가 경쟁하며 성장한 시기를 삼국 시대라고 해요.", 3, 4, 1],
+    ["역사", "고구려 고분 벽화로 알 수 있는 것은?", "고구려 사람들의 생활과 믿음", "미래의 생활", "현대 교통만", "외국 날씨만", "무덤 벽화에는 당시의 옷, 놀이, 종교 등이 표현되어 있어요.", 3, 4, 2],
+    ["역사", "석굴암이 만들어진 나라는?", "통일 신라", "고조선", "조선", "대한제국", "석굴암은 통일 신라의 뛰어난 불교 문화유산이에요.", 3, 4, 1],
+    ["역사", "푸른빛으로 유명한 고려의 도자기는?", "고려청자", "백제 금동대향로", "신라 금관", "조선 백자만", "고려청자는 맑은 비취색과 섬세한 무늬로 유명해요.", 3, 4, 1],
+    ["역사", "고려대장경을 나무판에 새긴 까닭은?", "불교의 힘으로 위기를 이겨내길 바라서", "놀이판을 만들려고", "집을 지으려고", "돈을 만들려고", "몽골 침입기에 나라의 안녕을 바라며 불교 경전을 새겼어요.", 3, 4, 2],
+    ["역사", "세종이 훈민정음을 만든 가장 큰 까닭은?", "백성이 쉽게 글을 쓰게 하려고", "한자를 없애려고만", "왕만 읽게 하려고", "외국어를 만들려고", "어려운 한자를 익히지 못한 백성도 뜻을 표현하도록 만들었어요.", 3, 4, 1],
+    ["역사", "거북선을 활용해 바다를 지킨 인물은?", "이순신", "세종", "정약용", "김정호", "이순신은 조선 수군을 이끌어 일본군의 침략에 맞섰어요.", 3, 4, 1],
+    ["역사", "조선 후기 현실 문제 해결을 강조한 학문은?", "실학", "주술", "신화", "점성술", "실학자들은 농업과 상공업 등 실제 생활의 개선을 연구했어요.", 3, 4, 2],
+    ["역사", "문화유산의 만든 시기와 쓰임을 조사하는 까닭은?", "역사적 의미를 바르게 이해하려고", "가격만 정하려고", "새것으로 바꾸려고", "모두 버리려고", "배경과 용도를 알아야 문화유산이 전하는 역사를 이해할 수 있어요.", 3, 4, 2],
+    // 3~4학년: 생활
+    ["생활", "온라인 댓글을 쓸 때 바른 태도는?", "상대방을 존중하는 말 쓰기", "욕설 쓰기", "확인 없이 소문 퍼뜨리기", "개인정보 공개하기", "온라인에서도 실제 사람과 대화하듯 예의를 지켜야 해요.", 3, 4, 1],
+    ["생활", "친구가 만든 그림을 과제에 쓰려면?", "허락받고 출처 밝히기", "이름 지우기", "내 작품이라 하기", "몰래 판매하기", "창작물은 만든 사람의 권리를 존중해 이용해야 해요.", 3, 4, 2],
+    ["생활", "계정마다 다른 비밀번호를 쓰는 까닭은?", "한 계정 유출이 다른 계정으로 번지는 것을 막으려고", "외우기 어렵게 하려고", "로그인을 못 하게 하려고", "친구와 공유하려고", "비밀번호 재사용을 피하면 연쇄적인 계정 피해를 줄일 수 있어요.", 3, 4, 2],
+    ["생활", "화재 대피 때 젖은 수건을 찾느라 늦어지고 있어요.", "물건을 찾지 말고 즉시 안전한 길로 대피하기", "방으로 돌아가기", "엘리베이터 기다리기", "숨기", "화재 때는 대피가 우선이며 물건을 챙기느라 시간을 지체하면 안 돼요.", 3, 4, 1],
+    ["생활", "작은 상처에서 피가 날 때 먼저 할 일은?", "깨끗한 거즈로 눌러 지혈하기", "흙 바르기", "상처 계속 만지기", "더 크게 벌리기", "깨끗한 재료로 압박하고 어른에게 알려 상처를 씻고 보호해요.", 3, 4, 1],
+    ["생활", "식품 포장에서 꼭 확인하면 좋은 것은?", "유통기한과 원재료 표시", "포장 그림만", "광고 문구만", "글자 색만", "기한과 성분을 확인하면 안전하고 알맞은 식품을 고를 수 있어요.", 3, 4, 1],
+    ["생활", "화가 날 때 갈등을 줄이는 방법은?", "잠시 진정한 뒤 자신의 마음을 말하기", "물건 던지기", "소리 지르기", "대화 피하기", "감정을 가라앉히고 이유와 바람을 말하면 해결에 도움이 돼요.", 3, 4, 2],
+    ["생활", "학교폭력을 알게 되었을 때 할 일은?", "믿을 만한 어른에게 알리고 도움받기", "숨기기", "함께 놀리기", "영상 퍼뜨리기", "혼자 견디지 말고 보호자와 선생님 등에게 도움을 요청해야 해요.", 3, 4, 1],
+    ["생활", "사용하지 않는 교실의 전등은 어떻게 할까요?", "끄고 나와 전기를 아껴요", "계속 켜 둬요", "모두 더 켜요", "전구를 만져요", "필요 없는 전기를 끄면 에너지와 자원을 절약할 수 있어요.", 3, 4, 1],
+    ["생활", "자전거 방향을 바꾸기 전 해야 할 일은?", "주변을 확인하고 손 신호로 알려요", "눈을 감고 돌아요", "갑자기 꺾어요", "이어폰 소리를 높여요", "주변 차량과 보행자에게 움직임을 미리 알리면 사고를 줄여요.", 3, 4, 2],
+    // 5~6학년: 과학
+    ["과학", "광합성에 식물이 공기에서 사용하는 기체는?", "이산화탄소", "질소만", "수소", "헬륨", "식물은 이산화탄소와 물을 이용해 양분을 만들어요.", 5, 6, 1],
+    ["과학", "사람이 호흡으로 받아들이는 기체는?", "산소", "이산화탄소만", "메테인", "수소", "산소는 세포가 양분에서 에너지를 얻는 데 필요해요.", 5, 6, 1],
+    ["과학", "물체를 지구 중심 쪽으로 끌어당기는 힘은?", "중력", "부력", "탄성력", "마찰력만", "지구의 중력 때문에 물체가 아래로 떨어지고 땅에 머물러요.", 5, 6, 1],
+    ["과학", "병렬회로에서 전구 하나가 끊어져도 다른 전구가 켜지는 까닭은?", "전류가 흐르는 길이 따로 있어서", "전지가 없어져서", "전선이 모두 끊겨서", "빛이 이동해서", "병렬회로는 갈래마다 독립된 전류 경로가 있어요.", 5, 6, 2],
+    ["과학", "볼록렌즈로 가까운 물체를 보면 어떻게 보일 수 있나요?", "크게 보일 수 있어요", "항상 사라져요", "소리로 들려요", "온도가 내려가요", "초점 안쪽의 물체는 볼록렌즈를 통해 확대된 바로 선 상으로 보여요.", 5, 6, 2],
+    ["과학", "계절마다 태양의 남중 고도가 달라지는 까닭은?", "지구 자전축이 기울어진 채 공전해서", "달이 매일 커져서", "태양이 지구를 돌아서", "구름 수만 달라서", "기울어진 지구가 공전하며 햇빛을 받는 각도가 달라져요.", 5, 6, 2],
+    ["과학", "일식이 일어날 때 천체의 배열은?", "태양-달-지구", "달-지구-태양", "지구-태양-달", "태양-지구-달만", "달이 태양과 지구 사이에서 태양빛을 가리면 일식이 일어나요.", 5, 6, 2],
+    ["과학", "생태계에서 곰팡이와 세균의 중요한 역할은?", "죽은 생물을 분해해 물질을 돌려보내요", "햇빛을 만들어요", "중력을 없애요", "비를 멈춰요", "분해자는 유기물을 작은 물질로 분해해 생태계 순환을 도와요.", 5, 6, 2],
+    ["과학", "같은 양의 물에 설탕을 더 많이 녹이면?", "용액의 농도가 높아져요", "농도가 낮아져요", "물이 고체가 돼요", "질량이 사라져요", "용매 양이 같을 때 용질이 많아지면 농도가 높아져요.", 5, 6, 1],
+    ["과학", "온실가스가 지나치게 늘면 생길 수 있는 현상은?", "지구 평균 기온 상승", "중력 소멸", "낮과 밤 소멸", "달의 공전 정지", "온실가스 증가는 지구가 내보내는 열을 더 많이 붙잡아요.", 5, 6, 2],
+    // 5~6학년: 사회
+    ["사회", "국가 권력을 여러 기관에 나누는 원리는?", "권력 분립", "신분제", "세습제", "봉건제", "권력 분립은 기관들이 서로 견제해 권력 남용을 막아요.", 5, 6, 1],
+    ["사회", "민주 선거의 기본 원칙에 해당하는 것은?", "보통·평등·직접·비밀 선거", "공개 강제 투표", "신분별 차등 투표", "대리인만 투표", "민주 선거는 모든 유권자의 자유롭고 동등한 선택을 보장해야 해요.", 5, 6, 2],
+    ["사회", "공급이 줄고 수요가 그대로라면 가격은 일반적으로?", "오르는 경향이 있어요", "반드시 0원이 돼요", "항상 절반이 돼요", "변하지 않아요", "원하는 양에 비해 물건이 부족해지면 가격이 오르는 경향이 있어요.", 5, 6, 2],
+    ["사회", "한 선택 때문에 포기한 것 중 가장 가치 있는 것은?", "기회비용", "이자", "세금", "환율", "기회비용은 선택으로 포기한 대안 중 가치가 가장 큰 것이에요.", 5, 6, 2],
+    ["사회", "국제 연합이 만들어진 중요한 목적은?", "국제 평화와 협력", "한 나라의 영토 확대", "모든 문화를 같게 만들기", "무역 중단", "국제 연합은 평화, 인권, 개발 등 공동 문제 해결을 위해 협력해요.", 5, 6, 1],
+    ["사회", "인권에 대한 설명으로 알맞은 것은?", "사람이라면 누구나 가지는 기본 권리", "어른만 가지는 특권", "돈으로 사는 상품", "국가가 마음대로 없애는 선물", "인권은 인간의 존엄을 위해 누구에게나 보장되어야 해요.", 5, 6, 1],
+    ["사회", "지방자치가 필요한 까닭은?", "지역 주민의 필요를 지역에서 반영하려고", "모든 지역을 똑같게 만들려고", "주민 의견을 막으려고", "선거를 없애려고", "지방자치는 주민이 지역 문제 해결에 참여하도록 해요.", 5, 6, 2],
+    ["사회", "나라들이 서로 무역하는 주된 까닭은?", "필요한 자원과 상품을 효율적으로 얻으려고", "모든 생산을 멈추려고", "화폐를 없애려고", "교류를 막으려고", "지역마다 자원과 기술이 달라 교환하면 선택의 폭을 넓힐 수 있어요.", 5, 6, 1],
+    ["사회", "적도 부근에 열대 기후가 나타나는 주된 까닭은?", "연중 태양 에너지를 많이 받아서", "항상 겨울이어서", "달과 가까워서", "바다가 없어서", "적도 부근은 햇빛을 비교적 수직으로 받아 기온이 높아요.", 5, 6, 2],
+    ["사회", "지속 가능한 발전이 뜻하는 것은?", "미래 세대의 필요도 해치지 않는 발전", "자원을 한꺼번에 쓰는 발전", "환경을 고려하지 않는 성장", "현재만 생각하는 소비", "환경·사회·경제를 함께 고려해 미래에도 이어질 수 있어야 해요.", 5, 6, 2],
+    // 5~6학년: 역사
+    ["역사", "고조선의 법 조항으로 알 수 있는 것은?", "생명과 재산을 중요하게 여겼어요", "바다 무역만 했어요", "한글을 사용했어요", "과거제를 실시했어요", "전해지는 8조법에는 생명과 재산을 보호하려는 내용이 있어요.", 5, 6, 2],
+    ["역사", "고구려 영토를 크게 넓힌 왕은?", "광개토대왕", "의자왕", "문무왕", "공민왕", "광개토대왕은 적극적인 정복 활동으로 고구려 영토를 넓혔어요.", 5, 6, 1],
+    ["역사", "신라의 골품제가 영향을 준 것은?", "관직 진출과 생활 범위", "날씨 변화", "농작물 종류만", "문자 발명", "골품에 따라 오를 수 있는 관직과 생활 모습에 제한이 있었어요.", 5, 6, 2],
+    ["역사", "발해가 고구려 계승 의식을 보인 근거는?", "고구려 유민이 건국에 참여했어요", "조선 법전을 썼어요", "한글을 창제했어요", "수도를 한양에 두었어요", "대조영과 고구려 유민들이 발해 건국의 중심 세력이었어요.", 5, 6, 2],
+    ["역사", "고려 광종이 과거제를 실시한 목적은?", "능력 있는 인재를 뽑고 왕권을 강화하려고", "무신만 뽑으려고", "농사를 금지하려고", "신분제를 더 세분하려고", "시험으로 관리를 선발해 새로운 인재를 등용했어요.", 5, 6, 2],
+    ["역사", "몽골 침입 때 고려가 강화도로 수도를 옮긴 까닭은?", "수전에 약한 몽골에 오래 맞서려고", "바다를 메우려고", "일본과 가까워지려고", "농토를 버리려고", "섬의 지형을 이용해 몽골군에 항전하려 했어요.", 5, 6, 2],
+    ["역사", "조선이 유교를 통치 이념으로 삼으며 강조한 것은?", "충효와 예에 따른 사회 질서", "불교 사원만의 정치", "신분 없는 사회", "해외 식민지 건설", "조선은 성리학을 바탕으로 정치와 생활 제도를 정비했어요.", 5, 6, 2],
+    ["역사", "임진왜란 때 조선 수군의 승리가 중요했던 까닭은?", "일본군의 보급로를 막는 데 도움을 줘서", "농사를 모두 멈춰서", "수도를 옮겨서", "과거제를 시작해서", "바닷길을 지키며 일본군의 병력과 물자 운송을 어렵게 했어요.", 5, 6, 2],
+    ["역사", "동학 농민 운동에서 농민들이 요구한 것은?", "탐관오리 처벌과 사회 개혁", "일제 식민 통치 강화", "신분 차별 확대", "외세의 자유로운 침략", "농민들은 부패한 정치와 외세 침략에 맞서 개혁을 요구했어요.", 5, 6, 2],
+    ["역사", "1919년에 대한민국 임시정부가 세워진 곳은?", "중국 상하이", "서울", "평양", "도쿄", "3·1 운동 뒤 상하이에 통합된 대한민국 임시정부가 수립되었어요.", 5, 6, 1],
+    // 5~6학년: 생활
+    ["생활", "온라인 정보의 신뢰도를 확인하는 핵심 방법은?", "작성자·근거·날짜를 여러 출처와 비교하기", "조회 수만 보기", "제목만 믿기", "친구 말만 따르기", "출처와 증거를 교차 확인해야 잘못된 정보를 가려낼 수 있어요.", 5, 6, 1],
+    ["생활", "기관을 사칭해 송금을 재촉하는 연락을 받았어요.", "전화를 끊고 공식 번호로 직접 확인하기", "상대가 준 계좌로 즉시 보내기", "인증번호 알려주기", "앱 설치하기", "사칭 사기는 판단할 시간을 주지 않으므로 별도 공식 경로로 확인해요.", 5, 6, 2],
+    ["생활", "사용하지 않는 온라인 계정을 안전하게 관리하려면?", "개인정보를 지우고 공식 절차로 탈퇴하기", "그대로 방치하기", "비밀번호 공개하기", "친구에게 넘기기", "오래된 계정도 정보 유출 경로가 될 수 있어 정리하는 것이 좋아요.", 5, 6, 2],
+    ["생활", "인공지능의 도움으로 과제를 작성했다면 바른 태도는?", "내용을 검증하고 사용 사실과 출처를 밝혀요", "그대로 베껴 자신의 글이라 해요", "틀려도 확인하지 않아요", "친구 이름으로 내요", "도구가 만든 내용도 사실 확인과 정직한 사용 표시가 필요해요.", 5, 6, 2],
+    ["생활", "자동심장충격기가 도착하면 어떻게 해야 할까요?", "전원을 켜고 음성 안내에 따라 사용하기", "물에 담그기", "아무 버튼이나 계속 누르기", "환자에게 숨기기", "AED는 음성 안내에 따라 패드를 붙이고 주변 안전을 확인하며 사용해요.", 5, 6, 2],
+    ["생활", "재난 대비 가방에 알맞은 물품은?", "물·비상식량·손전등·구급품", "무거운 장식품", "유리병만", "게임기만", "대피에 필요한 가볍고 필수적인 물품을 미리 준비해요.", 5, 6, 1],
+    ["생활", "생활 속 탄소 배출을 줄이는 행동은?", "가까운 거리는 걷고 전기를 아껴요", "빈방 전등을 켜 둬요", "일회용품을 매번 써요", "음식을 계속 버려요", "에너지와 자원 사용을 줄이면 온실가스 배출 감소에 도움이 돼요.", 5, 6, 1],
+    ["생활", "영양성분표에서 나트륨을 확인하는 까닭은?", "지나친 섭취를 조절하려고", "단맛만 알아보려고", "포장 크기만 보려고", "가격을 정하려고", "영양 표시를 비교하면 나트륨 같은 성분의 섭취량을 관리할 수 있어요.", 5, 6, 2],
+    ["생활", "갈등 상황에서 나 전달법을 쓰는 방법은?", "상황과 내 느낌과 바람을 차분히 말해요", "상대를 비난해요", "과장된 소문을 내요", "대화를 끊어요", "비난 대신 자신의 느낌과 원하는 변화를 말하면 대화가 쉬워져요.", 5, 6, 2],
+    ["생활", "높은 수익을 보장한다는 낯선 투자 제안을 받았어요.", "보호자와 상의하고 공식 기관 정보를 확인해요", "급히 돈을 보내요", "신분증 사진을 보내요", "친구 돈도 모아요", "수익 보장과 송금 재촉은 금융 사기의 신호일 수 있어 신중히 확인해야 해요.", 5, 6, 2]
+];
+KNOWLEDGE_QUESTIONS.push(...KNOWLEDGE_EXTRA_SEEDS.map(([category, prompt, correct, wrong1, wrong2, wrong3, explanation, minGrade, maxGrade, tier]) => ({ category, prompt, choices: [correct, wrong1, wrong2, wrong3], answer: 0, explanation, minGrade, maxGrade, tier })));
 let knowledge = null;
-let knowledgeDiscoveries = new Set();
 let knowledgeReviewQuestions = null;
 function showKnowledgeReward(screenId, kind, title, detail, pokemonId) {
     const screen = byId(screenId);
@@ -4320,31 +4693,27 @@ function showKnowledgeReward(screenId, kind, title, detail, pokemonId) {
     mascot.className = "knowledge-reward-pokemon";
     replaceWithPokemon(mascot, pokemonId);
     const copy = document.createElement("div");
-    const label = kind === "discovery" ? "NEW DISCOVERY" : kind === "timeline" ? "TIME RESTORED" : "RESCUE BONUS";
+    const label = kind === "timeline" ? "TIME RESTORED" : "RESCUE BONUS";
     copy.innerHTML = "<span>" + label + "</span><strong>" + title + "</strong><small>" + detail + "</small>";
     reward.append(mascot, copy);
     screen.append(reward);
     window.setTimeout(() => reward.classList.add("leaving"), 1250);
     window.setTimeout(() => reward.remove(), 1650);
 }
-function renderKnowledgeBadge() {
-    const badge = byId("knowledgeBadge");
-    const value = badge.querySelector("b");
-    if (value)
-        value.textContent = knowledgeDiscoveries.size + " / 4";
-    badge.classList.toggle("complete", knowledgeDiscoveries.size === 4);
-    document.querySelectorAll(".knowledge-route [data-zone]").forEach((zone) => {
-        zone.classList.toggle("discovered", knowledgeDiscoveries.has(zone.dataset.zone));
-    });
-}
 function knowledgeQuestionsForGrade(grade) {
     const available = KNOWLEDGE_QUESTIONS.filter((question) => grade >= question.minGrade && grade <= question.maxGrade);
+    const categoryOrder = shuffle(["과학", "사회", "역사", "생활"]);
     const selected = [];
-    [1, 2, 3].forEach((tier) => {
-        const count = tier === 1 ? 4 : 3;
-        selected.push(...shuffle(available.filter((question) => question.tier === tier)).slice(0, count));
+    categoryOrder.forEach((category, index) => {
+        const targetCount = index < 2 ? 3 : 2;
+        const categoryQuestions = shuffle(available.filter((question) => question.category === category));
+        selected.push(...categoryQuestions.slice(0, targetCount));
     });
-    return selected.map(shuffleKnowledgeChoices);
+    if (selected.length < 10) {
+        const remaining = shuffle(available.filter((question) => !selected.includes(question)));
+        selected.push(...remaining.slice(0, 10 - selected.length));
+    }
+    return shuffle(selected).slice(0, 10).map(shuffleKnowledgeChoices);
 }
 function shuffleKnowledgeChoices(question) {
     const indexed = question.choices.map((label, index) => ({ label, correct: index === question.answer }));
@@ -4359,7 +4728,6 @@ function startKnowledge(reviewQuestions) {
         ? reviewQuestions.map(shuffleKnowledgeChoices)
         : knowledgeQuestionsForGrade(state.grade);
     knowledgeReviewQuestions = null;
-    knowledgeDiscoveries = new Set();
     knowledge = {
         questions, answers: [], index: 0, score: 0, correct: 0, streak: 0, best: 0,
         locked: false, started: Date.now(), running: true, timer: null, isReview
@@ -4404,7 +4772,6 @@ function nextKnowledgeQuestion() {
     document.querySelectorAll(".knowledge-route [data-zone]").forEach((zone) => {
         zone.classList.toggle("active", zone.dataset.zone === question.category);
     });
-    renderKnowledgeBadge();
     renderKnowledgeHud();
 }
 function answerKnowledge(index, selected) {
@@ -4421,8 +4788,6 @@ function answerKnowledge(index, selected) {
             button.classList.add("correct");
     });
     if (correct) {
-        const firstDiscovery = !knowledgeDiscoveries.has(question.category);
-        knowledgeDiscoveries.add(question.category);
         knowledge.correct += 1;
         knowledge.streak += 1;
         knowledge.best = Math.max(knowledge.best, knowledge.streak);
@@ -4433,11 +4798,6 @@ function answerKnowledge(index, selected) {
         byId("knowledgeExplanation").textContent = "정답! " + question.explanation;
         correctSound();
         pokemonSparkBurst(151);
-        renderKnowledgeBadge();
-        if (firstDiscovery)
-            showKnowledgeReward("screen-knowledge", "discovery", question.category + " 지역 발견!", "뮤가 새로운 지식 배지를 지도에 기록했어요.", 151);
-        else if (knowledge.streak > 0 && knowledge.streak % 3 === 0)
-            showKnowledgeReward("screen-knowledge", "discovery", knowledge.streak + "연속 탐험 성공!", "뮤가 연속 정답 보너스를 발견했어요.", 151);
     }
     else {
         knowledge.streak = 0;
@@ -4472,7 +4832,6 @@ function renderKnowledgeHud() {
         dot.textContent = answer ? answer.correct ? "✓" : "×" : String(index + 1);
         progress.append(dot);
     }
-    renderKnowledgeBadge();
 }
 function stopKnowledge() {
     if (!knowledge)
@@ -4913,6 +5272,109 @@ function cleanupGame() {
     knowledge = null;
 }
 let levelUpPopupTimer = null;
+let pokemonDiscoveryPopupTimer = null;
+let pokemonDiscoveryAfterClose = null;
+function closePokemonDiscoveryPopup() {
+    if (pokemonDiscoveryPopupTimer !== null)
+        window.clearTimeout(pokemonDiscoveryPopupTimer);
+    pokemonDiscoveryPopupTimer = null;
+    const overlay = document.querySelector(".pokemon-discovery-overlay");
+    if (!overlay)
+        return;
+    const afterClose = pokemonDiscoveryAfterClose;
+    pokemonDiscoveryAfterClose = null;
+    overlay.classList.add("leaving");
+    window.setTimeout(() => {
+        overlay.remove();
+        afterClose?.();
+    }, 280);
+}
+function showPokemonDiscoveryPopup(pokemonList, afterClose) {
+    if (!pokemonList.length) {
+        afterClose?.();
+        return;
+    }
+    if (pokemonDiscoveryPopupTimer !== null)
+        window.clearTimeout(pokemonDiscoveryPopupTimer);
+    document.querySelector(".pokemon-discovery-overlay")?.remove();
+    pokemonDiscoveryAfterClose = afterClose ?? null;
+    const overlay = document.createElement("div");
+    overlay.className = "pokemon-discovery-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "pokemonDiscoveryTitle");
+    const panel = document.createElement("section");
+    panel.className = "pokemon-discovery-popup";
+    if (pokemonList.length === 1)
+        panel.classList.add("single");
+    const rays = document.createElement("div");
+    rays.className = "pokemon-discovery-rays";
+    rays.setAttribute("aria-hidden", "true");
+    const label = document.createElement("span");
+    label.className = "pokemon-discovery-label";
+    label.textContent = "NEW POKÉMON DISCOVERED";
+    const heading = document.createElement("h2");
+    heading.id = "pokemonDiscoveryTitle";
+    heading.textContent = pokemonList.length === 1 ? "새로운 친구를 발견했어요!" : `새로운 친구 ${pokemonList.length}마리를 발견했어요!`;
+    const message = document.createElement("p");
+    message.textContent = "모험에서 모은 별빛이 반짝이며 포켓몬 도감에 새 기록이 추가됐어요.";
+    const grid = document.createElement("div");
+    grid.className = "pokemon-discovery-grid";
+    pokemonList.forEach((pokemon, index) => {
+        const card = document.createElement("article");
+        card.className = "pokemon-discovery-card";
+        card.style.setProperty("--discovery-index", String(index));
+        const newMark = document.createElement("span");
+        newMark.textContent = "NEW";
+        const image = document.createElement("img");
+        image.src = spriteUrl(pokemon.id);
+        image.alt = pokemon.name;
+        const number = document.createElement("small");
+        number.textContent = "No." + String(pokemon.id).padStart(3, "0");
+        const name = document.createElement("strong");
+        name.textContent = pokemon.name;
+        card.append(newMark, image, number, name);
+        grid.append(card);
+    });
+    const discovered = discoveredPokemonCount();
+    const progress = document.createElement("div");
+    progress.className = "pokemon-discovery-progress";
+    const progressCopy = document.createElement("span");
+    progressCopy.innerHTML = `<b>${discovered}</b> / ${POKEMON.length} 도감 등록`;
+    const progressTrack = document.createElement("div");
+    const progressFill = document.createElement("i");
+    progressFill.style.width = discovered / POKEMON.length * 100 + "%";
+    progressTrack.append(progressFill);
+    progress.append(progressCopy, progressTrack);
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "pokemon-discovery-continue";
+    closeButton.textContent = "도감에 기록했어요!";
+    closeButton.addEventListener("click", closePokemonDiscoveryPopup);
+    overlay.addEventListener("click", (event) => { if (event.target === overlay)
+        closePokemonDiscoveryPopup(); });
+    overlay.addEventListener("keydown", (event) => { if (event.key === "Escape")
+        closePokemonDiscoveryPopup(); });
+    for (let index = 0; index < 18; index += 1) {
+        const confetti = document.createElement("i");
+        confetti.className = "pokemon-discovery-confetti";
+        confetti.style.setProperty("--confetti-angle", `${index * 20}deg`);
+        confetti.style.setProperty("--confetti-delay", `${(index % 6) * .07}s`);
+        confetti.style.setProperty("--confetti-color", ["#ffd83d", "#ef4650", "#4aa7e8", "#5bc58a"][index % 4]);
+        panel.append(confetti);
+    }
+    panel.append(rays, label, heading, message, grid, progress, closeButton);
+    overlay.append(panel);
+    document.body.append(overlay);
+    window.requestAnimationFrame(() => overlay.classList.add("show"));
+    window.setTimeout(() => {
+        correctSound();
+        playPokemonCry(pokemonList[0].id, .22);
+        pokemonSparkBurst(42);
+    }, 260);
+    window.setTimeout(() => closeButton.focus(), 380);
+    pokemonDiscoveryPopupTimer = window.setTimeout(closePokemonDiscoveryPopup, 7200);
+}
 function closeLevelUpPopup() {
     if (levelUpPopupTimer !== null)
         window.clearTimeout(levelUpPopupTimer);
@@ -4987,8 +5449,11 @@ function showLevelUpPopup(previousLevel, newLevel, title, reward) {
 }
 function showResult(stars, title, speech, stats) {
     const progress = getTrainerProgress();
-    const previous = getTrainerProgress(Math.max(0, progress.stars - stars));
+    const previousStars = Math.max(0, progress.stars - stars);
+    const previous = getTrainerProgress(previousStars);
     const leveledUp = progress.current.level > previous.current.level;
+    const previouslyDiscovered = discoveredPokemonCountAtStars(previousStars);
+    const newlyDiscovered = POKEMON.slice(previouslyDiscovered, discoveredPokemonCount());
     replaceWithPokemon(byId("resultMascot"), getAvatarId());
     byId("resultStars").textContent = "★".repeat(stars) + "☆".repeat(3 - stars);
     byId("resultTitle").textContent = title;
@@ -5006,9 +5471,15 @@ function showResult(stars, title, speech, stats) {
     showScreen("result");
     window.setTimeout(() => playPokemonCry(getAvatarId(), .18), 220);
     pokemonSparkBurst(leveledUp ? 48 : stars >= 2 ? 30 : 14);
-    if (leveledUp) {
+    const showLevelUp = () => {
         levelUpSound();
-        window.setTimeout(() => showLevelUpPopup(previous.current.level, progress.current.level, progress.current.title, progress.current.reward), 380);
+        showLevelUpPopup(previous.current.level, progress.current.level, progress.current.title, progress.current.reward);
+    };
+    if (newlyDiscovered.length) {
+        window.setTimeout(() => showPokemonDiscoveryPopup(newlyDiscovered, leveledUp ? showLevelUp : undefined), 380);
+    }
+    else if (leveledUp) {
+        window.setTimeout(showLevelUp, 380);
     }
 }
 function openRecords() {
@@ -5566,6 +6037,14 @@ function bindEvents() {
     byId("dashboardDex").addEventListener("click", openPokedex);
     document.querySelectorAll("[data-help-category]").forEach((button) => button.addEventListener("click", () => openHelp((button.dataset.helpCategory ?? "all"))));
     byId("helpSearch").addEventListener("input", renderHelpCards);
+    byId("pokedexSearch").addEventListener("input", (event) => {
+        pokedexQuery = event.currentTarget.value;
+        renderPokedexGrid(discoveredPokemonCount());
+    });
+    document.querySelectorAll("[data-pokedex-filter]").forEach((button) => button.addEventListener("click", () => {
+        pokedexFilter = (button.dataset.pokedexFilter ?? "all");
+        renderPokedexGrid(discoveredPokemonCount());
+    }));
     document.querySelectorAll("[data-action]").forEach((button) => {
         button.addEventListener("click", () => {
             const action = button.dataset.action;
