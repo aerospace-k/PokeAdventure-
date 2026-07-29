@@ -24,40 +24,21 @@
   const compactText = (element) => (element?.textContent || "").replace(/\s+/g, " ").trim();
 
   function findGameRoot() {
-    const candidates = [...document.querySelectorAll("main, section, article, div")].filter((element) => {
-      const value = compactText(element);
-      return value.includes("남은 찌리리공") || value.includes("찌리리공 수") || value.includes("열기 모드");
-    });
-
-    return candidates
-      .filter((element) => element.querySelectorAll("button").length >= 20)
-      .sort((a, b) => a.querySelectorAll("*").length - b.querySelectorAll("*").length)[0] || null;
+    const root = document.getElementById("screen-mine");
+    return root?.classList.contains("active") ? root : null;
   }
 
   function findBoard(root) {
     if (!root) return null;
-    const candidates = [...root.querySelectorAll("div, section, article")]
-      .map((element) => ({ element, buttons: [...element.children].filter((child) => child.tagName === "BUTTON") }))
-      .filter(({ buttons }) => buttons.length >= 25 && buttons.length <= 100);
-
-    if (!candidates.length) {
-      const buttons = [...root.querySelectorAll("button")].filter((button) => {
-        const label = compactText(button);
-        return !/그만하기|모드|힌트|새로|다시|확인/.test(label);
-      });
-      if (buttons.length < 25) return null;
-      const parentCounts = new Map();
-      buttons.forEach((button) => parentCounts.set(button.parentElement, (parentCounts.get(button.parentElement) || 0) + 1));
-      return [...parentCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-    }
-
-    return candidates.sort((a, b) => b.buttons.length - a.buttons.length)[0].element;
+    const board = root.querySelector("#mineBoard");
+    if (!board) return null;
+    const cells = [...board.children].filter((child) => child.matches("button.mine-cell"));
+    return cells.length >= 25 ? board : null;
   }
 
   function boardCells(board) {
     if (!board) return [];
-    const direct = [...board.children].filter((child) => child.tagName === "BUTTON");
-    return direct.length >= 25 ? direct : [...board.querySelectorAll("button")].filter((button) => !/그만하기|모드|힌트|새로|다시|확인/.test(compactText(button)));
+    return [...board.children].filter((child) => child.matches("button.mine-cell"));
   }
 
   function showToast(message, kind = "info", anchor = null) {
