@@ -47,7 +47,7 @@ document.addEventListener("visibilitychange", () => {
         lifecycleAnimationOffset += performance.now() - lifecycleHiddenAt;
     lifecycleHiddenAt = null;
 });
-const POKEMON = [
+const POKEMON_CATALOG = [
     { id: 25, name: "피카츄" }, { id: 133, name: "이브이" }, { id: 4, name: "파이리" },
     { id: 1, name: "이상해씨" }, { id: 7, name: "꼬부기" }, { id: 151, name: "뮤" },
     { id: 143, name: "잠만보" }, { id: 37, name: "식스테일" }, { id: 54, name: "고라파덕" },
@@ -82,6 +82,15 @@ const POKEMON = [
     { id: 38, name: "나인테일" }, { id: 68, name: "괴력몬" }, { id: 34, name: "니드킹" },
     { id: 36, name: "픽시" }, { id: 40, name: "푸크린" }, { id: 80, name: "야도란" },
     { id: 121, name: "아쿠스타" }, { id: 78, name: "날쌩마" }
+];
+const POPULAR_POKEMON_IDS = [
+    25, 133, 4, 7, 1, 151, 6, 143, 94, 149, 54, 39, 37, 58, 150, 447, 722, 778, 132, 129,
+    131, 52, 79, 403, 653, 656, 393, 387, 479, 704, 677, 674, 570, 885, 872, 255, 252, 258, 417, 35
+];
+const popularPokemonIdSet = new Set(POPULAR_POKEMON_IDS);
+const POKEMON = [
+    ...POPULAR_POKEMON_IDS.map((id) => POKEMON_CATALOG.find((pokemon) => pokemon.id === id)),
+    ...POKEMON_CATALOG.filter((pokemon) => !popularPokemonIdSet.has(pokemon.id))
 ];
 const MODE_MASCOTS = {
     quiz: 25, rain: 129, mole: 50, memory: 132, ox: 54, balloon: 39, space: 722, mine: 100, knowledge: 151,
@@ -185,22 +194,44 @@ const STORAGE = {
     records: "amsan_records_v2",
     last: "amsan_last_v2",
     lifetimeStars: "amsan_lifetime_stars_v1",
+    progressionStars: "amsan_progression_stars_v2",
+    progressionRules: "amsan_progression_rules_v2",
     celebratedPokemon: "amsan_celebrated_pokemon_v1"
 };
-const TRAINER_LEVELS = [
-    { level: 1, minStars: 0, title: "새싹 트레이너", reward: "기본 트레이너 카드", dexBonus: 0, tier: "starter" },
-    { level: 2, minStars: 5, title: "포켓볼 트레이너", reward: "도감 보너스 +1", dexBonus: 1, tier: "starter" },
-    { level: 3, minStars: 12, title: "호기심 탐험가", reward: "새싹 탐험 배지", dexBonus: 1, tier: "starter" },
-    { level: 4, minStars: 21, title: "슈퍼볼 트레이너", reward: "슈퍼볼 카드 테마", dexBonus: 2, tier: "great" },
-    { level: 5, minStars: 32, title: "지식 수집가", reward: "도감 보너스 +2", dexBonus: 4, tier: "great" },
-    { level: 6, minStars: 45, title: "공간 탐험가", reward: "지식 탐험 배지", dexBonus: 4, tier: "great" },
-    { level: 7, minStars: 60, title: "하이퍼볼 트레이너", reward: "하이퍼볼 카드 테마", dexBonus: 6, tier: "ultra" },
-    { level: 8, minStars: 78, title: "별빛 연구원", reward: "도감 보너스 +3", dexBonus: 9, tier: "ultra" },
-    { level: 9, minStars: 99, title: "챔피언 후보", reward: "별빛 탐험 배지", dexBonus: 9, tier: "ultra" },
-    { level: 10, minStars: 123, title: "마스터볼 트레이너", reward: "마스터볼 카드 테마", dexBonus: 12, tier: "master" },
-    { level: 11, minStars: 150, title: "배움 챔피언", reward: "도감 보너스 +4", dexBonus: 16, tier: "master" },
-    { level: 12, minStars: 180, title: "배움 마스터", reward: "배움 마스터 배지", dexBonus: 20, tier: "master" }
+const PROGRESSION_CUTOVER_AT = Date.parse("2026-07-29T22:18:55+09:00");
+const PROGRESSION_RULESET = "popularity-unlocks-v1";
+const TRAINER_TITLES = [
+    { level: 1, title: "새싹 트레이너" }, { level: 5, title: "포켓볼 트레이너" },
+    { level: 10, title: "호기심 탐험가" }, { level: 20, title: "슈퍼볼 트레이너" },
+    { level: 30, title: "지식 수집가" }, { level: 40, title: "공간 탐험가" },
+    { level: 50, title: "하이퍼볼 트레이너" }, { level: 60, title: "별빛 연구원" },
+    { level: 70, title: "챔피언 후보" }, { level: 80, title: "마스터볼 트레이너" },
+    { level: 90, title: "배움 챔피언" }, { level: 100, title: "배움 마스터" }
 ];
+function trainerTitleAtLevel(level) {
+    return TRAINER_TITLES.reduce((title, milestone) => level >= milestone.level ? milestone.title : title, "새싹 트레이너");
+}
+function trainerTierAtLevel(level) {
+    if (level >= 75)
+        return "master";
+    if (level >= 50)
+        return "ultra";
+    if (level >= 25)
+        return "great";
+    return "starter";
+}
+const TRAINER_LEVELS = Array.from({ length: 100 }, (_, index) => {
+    const level = index + 1;
+    const trainerReward = level >= 5 && level <= 95 && level % 5 === 0;
+    return {
+        level,
+        minStars: index * 5,
+        title: trainerTitleAtLevel(level),
+        reward: level === 1 ? "피카츄와 지우" : trainerReward ? "새 포켓몬과 트레이너" : "새 포켓몬",
+        dexBonus: 0,
+        tier: trainerTierAtLevel(level)
+    };
+});
 function byId(id) {
     const element = document.getElementById(id);
     if (!element)
@@ -226,7 +257,7 @@ function pokemonUrl(id) {
     return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + id + ".png";
 }
 const TRAINER_SPRITE_BASE = "https://play.pokemonshowdown.com/sprites/trainers/";
-const TRAINER_CHOICES = [
+const TRAINER_CATALOG = [
     { id: "ash", name: "지우", file: "ash.png", region: "관동" },
     { id: "misty", name: "이슬", file: "misty.png", region: "관동" },
     { id: "brock", name: "웅이", file: "brock.png", region: "관동" },
@@ -248,6 +279,29 @@ const TRAINER_CHOICES = [
     { id: "lillie", name: "릴리에", file: "lillie.png", region: "알로라" },
     { id: "rocket", name: "로켓단 로사·로이", file: "jessiejames-gen1.png", region: "로켓단" }
 ];
+const POPULAR_TRAINER_IDS = [
+    "ash", "red", "misty", "brock", "serena", "dawn", "may", "lillie", "blue", "rocket",
+    "leaf", "brendan", "lucas", "hilda", "rosa", "hilbert", "nate", "calem", "selene", "elio"
+];
+const TRAINER_CHOICES = POPULAR_TRAINER_IDS.map((id) => TRAINER_CATALOG.find((trainer) => trainer.id === id));
+function progressionRewardText(previousLevel, newLevel) {
+    const rewards = [];
+    const previousPokemonCount = unlockedPokemonCountAtLevel(previousLevel);
+    const newPokemonCount = unlockedPokemonCountAtLevel(newLevel);
+    const newPokemon = POKEMON.slice(previousPokemonCount, newPokemonCount);
+    if (newPokemon.length === 1)
+        rewards.push(`${newPokemon[0].name} 획득`);
+    else if (newPokemon.length > 1)
+        rewards.push(`포켓몬 ${newPokemon.length}마리 획득`);
+    const previousTrainerCount = unlockedTrainerCountAtLevel(previousLevel);
+    const newTrainerCount = unlockedTrainerCountAtLevel(newLevel);
+    const newTrainers = TRAINER_CHOICES.slice(previousTrainerCount, newTrainerCount);
+    if (newTrainers.length === 1)
+        rewards.push(`${newTrainers[0].name} 트레이너 획득`);
+    else if (newTrainers.length > 1)
+        rewards.push(`트레이너 ${newTrainers.length}명 획득`);
+    return rewards.join(" · ") || "성장 보상 획득";
+}
 function trainerMedia(file, name, className = "") {
     const wrapper = document.createElement("span");
     wrapper.className = "trainer-media" + (className ? " " + className : "");
@@ -328,6 +382,32 @@ function safeRemove(key) {
     }
     catch { /* 저장 차단 시 무시 */ }
 }
+function initializeProgressionRules() {
+    if (Date.now() < PROGRESSION_CUTOVER_AT || safeGet(STORAGE.progressionRules) === PROGRESSION_RULESET)
+        return;
+    safeSet(STORAGE.progressionStars, "0");
+    safeSet(STORAGE.avatar, "25");
+    safeSet(STORAGE.trainer, "ash");
+    safeSet(STORAGE.celebratedPokemon, "1");
+    safeSet(STORAGE.progressionRules, PROGRESSION_RULESET);
+}
+function unlockedPokemonCountAtLevel(level) {
+    return Math.min(POKEMON.length, Math.max(1, Math.floor(level)));
+}
+function trainerUnlockLevel(index) {
+    return index === 0 ? 1 : index * 5;
+}
+function unlockedTrainerCountAtLevel(level) {
+    return Math.min(TRAINER_CHOICES.length, 1 + Math.floor(Math.max(0, Math.floor(level)) / 5));
+}
+function isPokemonUnlocked(id, level = getTrainerProgress().current.level) {
+    const index = POKEMON.findIndex((pokemon) => pokemon.id === id);
+    return index >= 0 && index < unlockedPokemonCountAtLevel(level);
+}
+function isTrainerUnlocked(id, level = getTrainerProgress().current.level) {
+    const index = TRAINER_CHOICES.findIndex((trainer) => trainer.id === id);
+    return index >= 0 && index < unlockedTrainerCountAtLevel(level);
+}
 async function fetchWithTimeout(input, init = {}, timeoutMs = 9000) {
     const controller = new AbortController();
     const upstreamSignal = init.signal;
@@ -375,29 +455,29 @@ function showAccessDenied(message = "접속할 수 없습니다.") {
 }
 function getAvatarId() {
     const parsed = Number(safeGet(STORAGE.avatar));
-    if (POKEMON.some((pokemon) => pokemon.id === parsed))
+    if (isPokemonUnlocked(parsed))
         return parsed;
-    safeRemove(STORAGE.avatar);
+    safeSet(STORAGE.avatar, "25");
     return 25;
 }
 function hasSavedAvatar() {
     const parsed = Number(safeGet(STORAGE.avatar));
-    return POKEMON.some((pokemon) => pokemon.id === parsed);
+    return isPokemonUnlocked(parsed);
 }
 function setAvatarId(id) {
-    if (POKEMON.some((pokemon) => pokemon.id === id))
+    if (isPokemonUnlocked(id))
         safeSet(STORAGE.avatar, String(id));
 }
 function getTrainerChoice() {
     const saved = safeGet(STORAGE.trainer);
-    return TRAINER_CHOICES.find((trainer) => trainer.id === saved) ?? TRAINER_CHOICES[0];
+    return TRAINER_CHOICES.find((trainer) => trainer.id === saved && isTrainerUnlocked(trainer.id)) ?? TRAINER_CHOICES[0];
 }
 function hasSavedTrainer() {
     const saved = safeGet(STORAGE.trainer);
-    return TRAINER_CHOICES.some((trainer) => trainer.id === saved);
+    return TRAINER_CHOICES.some((trainer) => trainer.id === saved && isTrainerUnlocked(trainer.id));
 }
 function setTrainerChoice(id) {
-    if (TRAINER_CHOICES.some((trainer) => trainer.id === id))
+    if (isTrainerUnlocked(id))
         safeSet(STORAGE.trainer, id);
 }
 function readRecords() {
@@ -423,7 +503,7 @@ function readRecords() {
 }
 function saveRecord(entry) {
     const lifetimeStars = getLifetimeStars() + Math.max(0, Math.min(3, Math.floor(entry.stars)));
-    safeSet(STORAGE.lifetimeStars, String(lifetimeStars));
+    safeSet(STORAGE.progressionStars, String(lifetimeStars));
     const records = [entry, ...readRecords()].slice(0, 60);
     safeSet(STORAGE.records, JSON.stringify(records));
     updateSideInfo();
@@ -511,11 +591,10 @@ async function readSharedRecords(mode, signal) {
     return rows.map((row) => sanitizeRecord(row, true)).filter((row) => row !== null);
 }
 function getLifetimeStars() {
-    const recordStars = readRecords().reduce((sum, record) => sum + Math.max(0, Math.min(3, Math.floor(record.stars))), 0);
-    const stored = Number(safeGet(STORAGE.lifetimeStars));
-    const stars = Number.isFinite(stored) && stored >= 0 ? Math.max(Math.floor(stored), recordStars) : recordStars;
-    if (String(stars) !== safeGet(STORAGE.lifetimeStars))
-        safeSet(STORAGE.lifetimeStars, String(stars));
+    const stored = Number(safeGet(STORAGE.progressionStars));
+    const stars = Number.isFinite(stored) && stored >= 0 ? Math.floor(stored) : 0;
+    if (String(stars) !== safeGet(STORAGE.progressionStars))
+        safeSet(STORAGE.progressionStars, String(stars));
     return stars;
 }
 function getTrainerProgress(stars = getLifetimeStars()) {
@@ -1104,7 +1183,7 @@ function pokemonAvatarMedia(pokemon) {
 }
 function discoveredPokemonCountAtStars(stars) {
     const progress = getTrainerProgress(Math.max(0, Math.floor(stars)));
-    return Math.min(POKEMON.length, 5 + progress.stars + progress.current.dexBonus);
+    return unlockedPokemonCountAtLevel(progress.current.level);
 }
 function discoveredPokemonCount() {
     return discoveredPokemonCountAtStars(getLifetimeStars());
@@ -1115,7 +1194,7 @@ function celebratedPokemonCount() {
     const stored = raw === null || raw.trim() === "" ? Number.NaN : Number(raw);
     if (Number.isFinite(stored) && stored >= 0)
         return Math.min(discovered, Math.floor(stored));
-    const initial = discovered > 5 ? discovered - 1 : discovered;
+    const initial = discovered > 1 ? discovered - 1 : discovered;
     safeSet(STORAGE.celebratedPokemon, String(initial));
     return initial;
 }
@@ -1124,10 +1203,20 @@ function markPokemonDiscoveryCelebrated(count = discoveredPokemonCount()) {
 }
 let pokedexFilter = "all";
 let pokedexQuery = "";
+let trainerAlbumQuery = "";
+let collectionView = "pokemon";
 let pokedexDetailRequest = 0;
 let pokedexDetailController = null;
+function syncCollectionFilterButtons() {
+    document.querySelectorAll("[data-pokedex-filter]").forEach((button) => {
+        const active = button.dataset.pokedexFilter === pokedexFilter;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+    });
+}
 function renderPokedexGrid(unlocked) {
     const grid = byId("pokedexGrid");
+    grid.classList.remove("trainer-album-grid");
     const query = pokedexQuery.trim().toLocaleLowerCase("ko-KR");
     const visible = POKEMON.map((pokemon, index) => ({ pokemon, index })).filter(({ pokemon, index }) => {
         const discovered = index < unlocked;
@@ -1177,26 +1266,72 @@ function renderPokedexGrid(unlocked) {
     }
     byId("pokedexVisibleCount").textContent = visible.length + "마리 표시";
     grid.setAttribute("aria-label", pokedexFilter === "all" ? "전체 포켓몬 목록" : pokedexFilter === "discovered" ? "발견한 포켓몬 목록" : "미발견 포켓몬 목록");
-    document.querySelectorAll("[data-pokedex-filter]").forEach((button) => {
-        const active = button.dataset.pokedexFilter === pokedexFilter;
-        button.classList.toggle("active", active);
-        button.setAttribute("aria-pressed", String(active));
-    });
+    syncCollectionFilterButtons();
 }
-function openPokedex() {
-    cleanupGame();
-    pokedexDetailController?.abort();
-    pokedexDetailController = null;
-    pokedexDetailRequest += 1;
-    setActiveNav("pokedex");
-    const unlocked = discoveredPokemonCount();
-    const celebrated = celebratedPokemonCount();
-    byId("pokedexCount").textContent = unlocked + " / " + POKEMON.length + " 발견";
-    byId("pokedexSearch").value = pokedexQuery;
-    renderPokedexGrid(unlocked);
+function renderTrainerAlbumGrid(unlocked) {
+    const grid = byId("pokedexGrid");
+    grid.classList.add("trainer-album-grid");
+    const query = trainerAlbumQuery.trim().toLocaleLowerCase("ko-KR");
+    const visible = TRAINER_CHOICES.map((trainer, index) => ({ trainer, index })).filter(({ trainer, index }) => {
+        const discovered = index < unlocked;
+        if (pokedexFilter === "discovered" && !discovered)
+            return false;
+        if (pokedexFilter === "locked" && discovered)
+            return false;
+        if (!query)
+            return true;
+        const requiredLevel = trainerUnlockLevel(index);
+        const matchesLevel = String(requiredLevel).includes(query.replace(/\D/g, ""));
+        const matchesKnownProfile = discovered && (trainer.name + " " + trainer.region).toLocaleLowerCase("ko-KR").includes(query);
+        return matchesKnownProfile || (query.replace(/\D/g, "").length > 0 && matchesLevel);
+    });
+    grid.replaceChildren();
+    visible.forEach(({ trainer, index }) => {
+        const discovered = index < unlocked;
+        const representative = discovered && trainer.id === getTrainerChoice().id;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.disabled = !discovered;
+        button.dataset.trainerId = trainer.id;
+        button.className = "pokedex-entry trainer-album-entry " + (discovered ? "discovered" : "locked") + (representative ? " representative" : "");
+        const requiredLevel = trainerUnlockLevel(index);
+        button.setAttribute("aria-label", discovered ? trainer.name + " 트레이너 자세히 보기 · " + trainer.region : "레벨 " + requiredLevel + "에 획득하는 트레이너");
+        const media = trainerMedia(trainer.file, discovered ? trainer.name : "미획득 트레이너", "trainer-album-thumb");
+        const unlock = document.createElement("small");
+        unlock.textContent = discovered ? trainer.region + " · Lv." + requiredLevel : "Lv." + requiredLevel + " 획득";
+        const name = document.createElement("strong");
+        name.textContent = discovered ? trainer.name : "???";
+        button.append(media, unlock, name);
+        if (representative) {
+            const badge = document.createElement("span");
+            badge.className = "trainer-current-badge";
+            badge.textContent = "대표";
+            button.append(badge);
+        }
+        else if (discovered && index === unlocked - 1 && unlocked < TRAINER_CHOICES.length) {
+            const badge = document.createElement("span");
+            badge.className = "pokedex-new-badge";
+            badge.textContent = "NEW";
+            button.append(badge);
+        }
+        if (discovered)
+            button.addEventListener("click", () => loadTrainerAlbumDetail(trainer, index, button));
+        grid.append(button);
+    });
+    if (!visible.length) {
+        const empty = document.createElement("p");
+        empty.className = "pokedex-empty";
+        empty.textContent = query ? "검색 조건에 맞는 트레이너가 없어요." : "이 조건에 해당하는 트레이너가 없어요.";
+        grid.append(empty);
+    }
+    byId("pokedexVisibleCount").textContent = visible.length + "명 표시";
+    grid.setAttribute("aria-label", pokedexFilter === "all" ? "전체 트레이너 목록" : pokedexFilter === "discovered" ? "획득한 트레이너 목록" : "미획득 트레이너 목록");
+    syncCollectionFilterButtons();
+}
+function renderPokedexIntro(unlocked) {
     const detail = byId("pokedexDetail");
+    detail.className = "pokedex-detail pokedex-intro";
     detail.replaceChildren();
-    detail.classList.add("pokedex-intro");
     const oak = trainerMedia("oak.png", "오박사", "pokedex-oak");
     const copy = document.createElement("div");
     copy.className = "pokedex-intro-copy";
@@ -1206,7 +1341,7 @@ function openPokedex() {
     const title = document.createElement("h3");
     title.textContent = "오박사의 연구 노트";
     const message = document.createElement("p");
-    message.textContent = "게임에서 별을 모으면 새로운 포켓몬을 발견해요. 포켓몬을 선택해 보세요.";
+    message.textContent = "레벨이 오를 때마다 인기순으로 새로운 포켓몬을 발견해요. 보유한 포켓몬을 선택해 보세요.";
     const progress = document.createElement("div");
     progress.className = "pokedex-intro-progress";
     const progressLabel = document.createElement("span");
@@ -1226,15 +1361,158 @@ function openPokedex() {
     });
     const tip = document.createElement("small");
     const nextPokemon = POKEMON[unlocked];
-    tip.textContent = unlocked >= POKEMON.length ? "도감을 완성했어요!" : "다음 연구: " + nextPokemon.name + " · 별 1개를 더 모아 보세요.";
+    const trainerProgress = getTrainerProgress();
+    tip.textContent = unlocked >= POKEMON.length ? "도감을 완성했어요!" : "다음 연구: " + nextPokemon.name + " · 다음 레벨까지 별 " + trainerProgress.remaining + "개";
     progress.append(progressLabel, progressTrack);
     copy.append(kicker, title, message, progress, stats, tip);
     detail.append(oak, copy);
+}
+function renderTrainerAlbumIntro(unlocked) {
+    const detail = byId("pokedexDetail");
+    detail.className = "pokedex-detail pokedex-intro trainer-album-detail trainer-album-intro";
+    detail.replaceChildren();
+    const selectedTrainer = getTrainerChoice();
+    const hero = trainerMedia(selectedTrainer.file, selectedTrainer.name, "pokedex-oak trainer-album-hero");
+    const copy = document.createElement("div");
+    copy.className = "pokedex-intro-copy";
+    const kicker = document.createElement("span");
+    kicker.className = "pokedex-intro-kicker";
+    kicker.textContent = "TRAINER COLLECTION";
+    const title = document.createElement("h3");
+    title.textContent = "나의 트레이너 앨범";
+    const message = document.createElement("p");
+    message.textContent = "5레벨마다 인기순으로 새로운 트레이너를 만나며, 획득한 트레이너의 전신 모습을 감상할 수 있어요.";
+    const progress = document.createElement("div");
+    progress.className = "pokedex-intro-progress";
+    const progressLabel = document.createElement("span");
+    progressLabel.textContent = "앨범 완성도 " + Math.round(unlocked / TRAINER_CHOICES.length * 100) + "%";
+    const progressTrack = document.createElement("div");
+    const progressFill = document.createElement("i");
+    progressFill.style.width = unlocked / TRAINER_CHOICES.length * 100 + "%";
+    progressTrack.append(progressFill);
+    const stats = document.createElement("div");
+    stats.className = "pokedex-intro-stats";
+    [[String(unlocked), "획득"], [String(TRAINER_CHOICES.length - unlocked), "남은 트레이너"]].forEach(([value, label]) => {
+        const stat = document.createElement("span");
+        const strong = document.createElement("b");
+        strong.textContent = value;
+        stat.append(strong, label);
+        stats.append(stat);
+    });
+    const tip = document.createElement("small");
+    const nextTrainer = TRAINER_CHOICES[unlocked];
+    tip.textContent = unlocked >= TRAINER_CHOICES.length ? "트레이너 앨범을 완성했어요!" : "다음 만남: " + nextTrainer.name + " · Lv." + trainerUnlockLevel(unlocked) + "에 획득";
+    progress.append(progressLabel, progressTrack);
+    copy.append(kicker, title, message, progress, stats, tip);
+    detail.append(hero, copy);
+}
+function setCollectionView(view) {
+    collectionView = view;
+    pokedexDetailController?.abort();
+    pokedexDetailController = null;
+    pokedexDetailRequest += 1;
+    const pokemonView = view === "pokemon";
+    const pokemonTab = byId("collectionPokemonTab");
+    const trainerTab = byId("collectionTrainerTab");
+    pokemonTab.classList.toggle("active", pokemonView);
+    trainerTab.classList.toggle("active", !pokemonView);
+    pokemonTab.setAttribute("aria-selected", String(pokemonView));
+    trainerTab.setAttribute("aria-selected", String(!pokemonView));
+    byId("collectionEyebrow").textContent = pokemonView ? "POKÉDEX" : "TRAINER ALBUM";
+    byId("collectionTitle").textContent = pokemonView ? "나의 포켓몬 도감" : "나의 트레이너 앨범";
+    byId("collectionSearchLabel").textContent = pokemonView ? "포켓몬 찾기" : "트레이너 찾기";
+    byId("collectionOwnedFilter").textContent = pokemonView ? "발견" : "획득";
+    byId("collectionLockedFilter").textContent = pokemonView ? "미발견" : "미획득";
+    document.querySelector("#screen-pokedex .pokedex-tools")?.setAttribute("aria-label", pokemonView ? "포켓몬 검색과 필터" : "트레이너 검색과 필터");
+    document.querySelector("#screen-pokedex .pokedex-filters")?.setAttribute("aria-label", pokemonView ? "발견 상태 필터" : "획득 상태 필터");
+    const search = byId("pokedexSearch");
+    search.placeholder = pokemonView ? "이름 또는 도감 번호" : "이름·지역 또는 획득 레벨";
+    search.value = pokemonView ? pokedexQuery : trainerAlbumQuery;
+    byId("pokedexGrid").classList.toggle("trainer-album-grid", !pokemonView);
+    if (pokemonView) {
+        const unlocked = discoveredPokemonCount();
+        byId("pokedexCount").textContent = unlocked + " / " + POKEMON.length + " 발견";
+        renderPokedexGrid(unlocked);
+        renderPokedexIntro(unlocked);
+    }
+    else {
+        const unlocked = unlockedTrainerCountAtLevel(getTrainerProgress().current.level);
+        byId("pokedexCount").textContent = unlocked + " / " + TRAINER_CHOICES.length + " 획득";
+        renderTrainerAlbumGrid(unlocked);
+        renderTrainerAlbumIntro(unlocked);
+    }
+}
+function openPokedex() {
+    cleanupGame();
+    setActiveNav("pokedex");
     showScreen("pokedex");
-    if (unlocked > celebrated) {
+    setCollectionView(collectionView);
+    const unlocked = discoveredPokemonCount();
+    const celebrated = celebratedPokemonCount();
+    if (collectionView === "pokemon" && unlocked > celebrated) {
         const missedDiscoveries = POKEMON.slice(celebrated, unlocked);
         window.setTimeout(() => showPokemonDiscoveryPopup(missedDiscoveries), 520);
     }
+}
+function loadTrainerAlbumDetail(trainer, index, selected) {
+    document.querySelectorAll(".trainer-album-entry").forEach((entry) => entry.classList.remove("selected"));
+    selected.classList.add("selected");
+    const detail = byId("pokedexDetail");
+    detail.className = "pokedex-detail trainer-album-detail";
+    detail.replaceChildren();
+    if (window.matchMedia("(max-width: 700px)").matches) {
+        window.requestAnimationFrame(() => detail.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+    const hero = trainerMedia(trainer.file, trainer.name, "trainer-album-hero");
+    const heading = document.createElement("div");
+    heading.className = "trainer-album-copy";
+    const number = document.createElement("small");
+    number.textContent = "TRAINER " + String(index + 1).padStart(2, "0") + " · 인기 컬렉션";
+    const title = document.createElement("h3");
+    title.textContent = trainer.name;
+    const region = document.createElement("p");
+    region.className = "trainer-album-region";
+    region.textContent = trainer.region + " 트레이너";
+    heading.append(number, title, region);
+    const description = document.createElement("p");
+    description.className = "pokedex-description trainer-album-description";
+    description.textContent = "모험을 함께할 대표 트레이너로 선택하거나, 획득한 전신 모습을 천천히 감상해 보세요.";
+    const facts = document.createElement("div");
+    facts.className = "pokedex-facts trainer-album-facts";
+    [[trainer.region, "활동 지역"], ["Lv." + trainerUnlockLevel(index), "획득 레벨"], [String(index + 1) + "번째", "인기 순서"]].forEach(([value, label]) => {
+        const item = document.createElement("span");
+        const strong = document.createElement("b");
+        strong.textContent = value;
+        item.append(strong, label);
+        facts.append(item);
+    });
+    const select = document.createElement("button");
+    select.type = "button";
+    select.className = "trainer-album-select";
+    const selectedTrainer = trainer.id === getTrainerChoice().id;
+    select.disabled = selectedTrainer;
+    select.textContent = selectedTrainer ? "현재 대표 트레이너" : "대표 트레이너로 설정";
+    select.addEventListener("click", () => {
+        setTrainerChoice(trainer.id);
+        updateSideInfo();
+        selectSound();
+        showToast(trainer.name + " 트레이너와 함께 모험해요!");
+        document.querySelectorAll(".trainer-album-entry").forEach((entry) => {
+            const representative = entry.dataset.trainerId === trainer.id;
+            entry.classList.toggle("representative", representative);
+            entry.querySelector(".trainer-current-badge")?.remove();
+            if (representative) {
+                entry.querySelector(".pokedex-new-badge")?.remove();
+                const badge = document.createElement("span");
+                badge.className = "trainer-current-badge";
+                badge.textContent = "대표";
+                entry.append(badge);
+            }
+        });
+        select.disabled = true;
+        select.textContent = "현재 대표 트레이너";
+    });
+    detail.append(hero, heading, description, facts, select);
 }
 async function loadPokedexDetail(pokemon, selected) {
     pokedexDetailController?.abort();
@@ -1245,7 +1523,7 @@ async function loadPokedexDetail(pokemon, selected) {
     selected.classList.add("selected");
     const detail = byId("pokedexDetail");
     detail.replaceChildren();
-    detail.classList.remove("pokedex-intro");
+    detail.className = "pokedex-detail";
     if (window.matchMedia("(max-width: 700px)").matches) {
         window.requestAnimationFrame(() => detail.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
@@ -5581,6 +5859,7 @@ function showResult(stars, title, speech, stats) {
     const previousStars = Math.max(0, progress.stars - stars);
     const previous = getTrainerProgress(previousStars);
     const leveledUp = progress.current.level > previous.current.level;
+    const levelReward = leveledUp ? progressionRewardText(previous.current.level, progress.current.level) : "";
     const previouslyDiscovered = discoveredPokemonCountAtStars(previousStars);
     const newlyDiscovered = POKEMON.slice(previouslyDiscovered, discoveredPokemonCount());
     replaceWithPokemon(byId("resultMascot"), getAvatarId());
@@ -5589,7 +5868,7 @@ function showResult(stars, title, speech, stats) {
     byId("resultSpeech").textContent = leveledUp ? speech + " 트레이너 레벨이 올랐어요!" : speech;
     const reward = byId("resultReward");
     reward.classList.toggle("hidden-panel", !leveledUp);
-    reward.textContent = leveledUp ? "LEVEL UP · Lv." + progress.current.level + " " + progress.current.title + " · " + progress.current.reward + " 획득" : "";
+    reward.textContent = leveledUp ? "LEVEL UP · Lv." + progress.current.level + " " + progress.current.title + " · " + levelReward : "";
     const container = byId("resultStats");
     container.replaceChildren();
     stats.forEach(([value, label]) => container.append(heroStat(value, label)));
@@ -5602,7 +5881,7 @@ function showResult(stars, title, speech, stats) {
     pokemonSparkBurst(leveledUp ? 48 : stars >= 2 ? 30 : 14);
     const showLevelUp = () => {
         levelUpSound();
-        showLevelUpPopup(previous.current.level, progress.current.level, progress.current.title, progress.current.reward);
+        showLevelUpPopup(previous.current.level, progress.current.level, progress.current.title, levelReward);
     };
     if (newlyDiscovered.length) {
         window.setTimeout(() => showPokemonDiscoveryPopup(newlyDiscovered, leveledUp ? showLevelUp : undefined), 380);
@@ -5937,6 +6216,9 @@ let nameChanging = false;
 let identityPickerStep = "pokemon";
 function renderIdentityPicker() {
     const pokemonStep = identityPickerStep === "pokemon";
+    const currentLevel = getTrainerProgress().current.level;
+    const pokemonOwned = unlockedPokemonCountAtLevel(currentLevel);
+    const trainerOwned = unlockedTrainerCountAtLevel(currentLevel);
     const pokemonTab = byId("pokemonPickerTab");
     const trainerTab = byId("trainerPickerTab");
     pokemonTab.classList.toggle("active", pokemonStep);
@@ -5948,8 +6230,8 @@ function renderIdentityPicker() {
         ? "함께 공부할 포켓몬을 골라요"
         : "상단에 표시할 트레이너를 골라요";
     byId("avatarCountText").textContent = pokemonStep
-        ? "기본형과 인기 진화형 포켓몬 " + POKEMON.length + "종"
-        : "인기 트레이너 " + TRAINER_CHOICES.length + "명 · 로켓단 포함";
+        ? "보유 " + pokemonOwned + " / " + POKEMON.length + " · 레벨업마다 인기순 1마리"
+        : "보유 " + trainerOwned + " / " + TRAINER_CHOICES.length + " · 5레벨마다 인기순 1명";
     byId("identityPickerHint").textContent = avatarChanging
         ? "두 탭을 오가며 원하는 조합을 선택한 뒤 선택 완료를 눌러요."
         : pokemonStep
@@ -5958,33 +6240,46 @@ function renderIdentityPicker() {
     const grid = byId("avatarGrid");
     grid.replaceChildren();
     if (pokemonStep)
-        POKEMON.forEach((pokemon) => {
+        POKEMON.forEach((pokemon, index) => {
+            const unlocked = index < pokemonOwned;
             const button = document.createElement("button");
             button.type = "button";
-            button.className = "avatar-button" + (pokemon.id === getAvatarId() ? " selected" : "");
-            button.setAttribute("aria-label", pokemon.name + " 선택");
+            button.disabled = !unlocked;
+            button.className = "avatar-button" + (unlocked ? "" : " progression-locked") + (unlocked && pokemon.id === getAvatarId() ? " selected" : "");
+            button.setAttribute("aria-label", unlocked ? pokemon.name + " 선택" : pokemon.name + " · 레벨 " + (index + 1) + "에 획득");
             button.append(pokemonAvatarMedia(pokemon));
             const label = document.createElement("small");
             label.textContent = pokemon.name;
             button.append(label);
-            button.addEventListener("click", () => {
-                setAvatarId(pokemon.id);
-                selectSound();
-                playPokemonCry(pokemon.id, .18);
-                if (avatarChanging)
-                    renderIdentityPicker();
-                else
-                    setIdentityPickerStep("trainer");
-            });
+            if (!unlocked) {
+                const lock = document.createElement("span");
+                lock.className = "avatar-unlock-badge";
+                lock.textContent = "Lv." + (index + 1);
+                button.append(lock);
+            }
+            else {
+                button.addEventListener("click", () => {
+                    setAvatarId(pokemon.id);
+                    selectSound();
+                    playPokemonCry(pokemon.id, .18);
+                    if (avatarChanging)
+                        renderIdentityPicker();
+                    else
+                        setIdentityPickerStep("trainer");
+                });
+            }
             grid.append(button);
         });
     if (!pokemonStep)
-        TRAINER_CHOICES.forEach((trainer) => {
+        TRAINER_CHOICES.forEach((trainer, index) => {
+            const unlocked = index < trainerOwned;
+            const requiredLevel = trainerUnlockLevel(index);
             const button = document.createElement("button");
             button.type = "button";
+            button.disabled = !unlocked;
             button.dataset.trainerId = trainer.id;
-            button.className = "avatar-button trainer-choice-button" + (trainer.id === getTrainerChoice().id ? " selected" : "");
-            button.setAttribute("aria-label", trainer.name + " 트레이너 선택 · " + trainer.region);
+            button.className = "avatar-button trainer-choice-button" + (unlocked ? "" : " progression-locked") + (unlocked && trainer.id === getTrainerChoice().id ? " selected" : "");
+            button.setAttribute("aria-label", unlocked ? trainer.name + " 트레이너 선택 · " + trainer.region : trainer.name + " 트레이너 · 레벨 " + requiredLevel + "에 획득");
             button.append(trainerMedia(trainer.file, trainer.name, "trainer-choice-media"));
             const label = document.createElement("small");
             const name = document.createElement("b");
@@ -5993,14 +6288,22 @@ function renderIdentityPicker() {
             region.textContent = trainer.region;
             label.append(name, region);
             button.append(label);
-            button.addEventListener("click", () => {
-                setTrainerChoice(trainer.id);
-                selectSound();
-                if (avatarChanging)
-                    renderIdentityPicker();
-                else
-                    enterApp();
-            });
+            if (!unlocked) {
+                const lock = document.createElement("span");
+                lock.className = "avatar-unlock-badge";
+                lock.textContent = "Lv." + requiredLevel;
+                button.append(lock);
+            }
+            else {
+                button.addEventListener("click", () => {
+                    setTrainerChoice(trainer.id);
+                    selectSound();
+                    if (avatarChanging)
+                        renderIdentityPicker();
+                    else
+                        enterApp();
+                });
+            }
             grid.append(button);
         });
 }
@@ -6218,15 +6521,27 @@ function bindEvents() {
     byId("dashboardGames").addEventListener("click", openGrades);
     byId("dashboardToday").addEventListener("click", openToday);
     byId("dashboardDex").addEventListener("click", openPokedex);
+    byId("collectionPokemonTab").addEventListener("click", () => setCollectionView("pokemon"));
+    byId("collectionTrainerTab").addEventListener("click", () => setCollectionView("trainer"));
     document.querySelectorAll("[data-help-category]").forEach((button) => button.addEventListener("click", () => openHelp((button.dataset.helpCategory ?? "all"))));
     byId("helpSearch").addEventListener("input", renderHelpCards);
     byId("pokedexSearch").addEventListener("input", (event) => {
-        pokedexQuery = event.currentTarget.value;
-        renderPokedexGrid(discoveredPokemonCount());
+        const value = event.currentTarget.value;
+        if (collectionView === "pokemon") {
+            pokedexQuery = value;
+            renderPokedexGrid(discoveredPokemonCount());
+        }
+        else {
+            trainerAlbumQuery = value;
+            renderTrainerAlbumGrid(unlockedTrainerCountAtLevel(getTrainerProgress().current.level));
+        }
     });
     document.querySelectorAll("[data-pokedex-filter]").forEach((button) => button.addEventListener("click", () => {
         pokedexFilter = (button.dataset.pokedexFilter ?? "all");
-        renderPokedexGrid(discoveredPokemonCount());
+        if (collectionView === "pokemon")
+            renderPokedexGrid(discoveredPokemonCount());
+        else
+            renderTrainerAlbumGrid(unlockedTrainerCountAtLevel(getTrainerProgress().current.level));
     }));
     document.querySelectorAll("[data-action]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -6267,6 +6582,10 @@ function bindEvents() {
         if (window.confirm("모든 기록을 지울까요?")) {
             safeRemove(STORAGE.records);
             safeRemove(STORAGE.lifetimeStars);
+            safeSet(STORAGE.progressionStars, "0");
+            safeSet(STORAGE.avatar, "25");
+            safeSet(STORAGE.trainer, "ash");
+            safeSet(STORAGE.celebratedPokemon, "1");
             updateSideInfo();
             openRecords();
         }
@@ -6341,6 +6660,7 @@ function restoreLastPlay() {
     state.mode = last.mode;
     state.diff = last.diff;
 }
+initializeProgressionRules();
 buildBackground();
 decorateGameScreens();
 bindEvents();
