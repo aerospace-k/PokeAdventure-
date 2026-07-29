@@ -11,7 +11,7 @@
   <link rel="shortcut icon" href="./assets/pokeball-favicon-32.png?v=1.0.20260726.6">
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/pokeball-apple-touch-icon.png?v=1.0.20260726.6">
   <link rel="manifest" href="./site.webmanifest?v=1.0.20260726.6">
-  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260729.1">
+  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260729.3">
   <script>document.documentElement.dataset.introScene = Math.random() < 0.5 ? "adventure" : "rocket";</script>
   <meta name="application-name" content="포켓몬 배움 탐험대">
   <meta name="app-version" content="1.0">
@@ -406,7 +406,10 @@
           </aside>
           <div class="history-workspace">
             <div class="history-energy" aria-live="polite">
-              <span>시간 에너지</span><div><i id="historyEnergyBar"></i></div><b id="historyEnergyText">0 / 8</b>
+              <span class="history-energy-title"><i aria-hidden="true">◷</i><span><small>TIME WAVE ENERGY</small><strong>시간 에너지</strong></span></span>
+              <b id="historyEnergyText">0 / 8</b>
+              <div class="history-energy-track" aria-hidden="true"><i id="historyEnergyBar"></i></div>
+              <small id="historyEnergyHint" class="history-energy-hint">사건을 순서대로 연결해 시간 물결을 채워요.</small>
             </div>            <div class="history-mission-head"><span>복원된 시간 물결</span><b id="historyMissionText">첫 사건을 찾아보세요</b></div>
             <div id="historyTimeline" class="history-timeline" aria-label="복원된 역사 시간선"></div>
             <div class="history-choice-head"><b>다음 사건은 무엇일까요?</b><span>가장 오래된 사건을 선택하세요.</span></div>
@@ -561,7 +564,7 @@
 
   <noscript>이 게임은 JavaScript를 켜야 실행할 수 있습니다.</noscript>
   <script src="./config/allowed-trainers.js"></script>
-  <script defer src="./dist/main.js?v=1.0.20260729.1"></script>
+  <script defer src="./dist/main.js?v=1.0.20260729.2"></script>
   <script>
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
       window.addEventListener("load", function () {
