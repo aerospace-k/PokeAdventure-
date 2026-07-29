@@ -9,10 +9,18 @@
   if (document.documentElement.dataset[DOCUMENT_FLAG] === "1") return;
   document.documentElement.dataset[DOCUMENT_FLAG] = "1";
 
+  const safeGet = (key) => {
+    try { return localStorage.getItem(key); } catch { return null; }
+  };
+  const safeSet = (key, value) => {
+    try { localStorage.setItem(key, value); } catch { /* storage may be unavailable */ }
+  };
+
   let currentRoot = null;
   let currentBoard = null;
   let combo = 0;
-  let bestCombo = Number(localStorage.getItem(BEST_COMBO_KEY) || 0);
+  const storedBestCombo = Number(safeGet(BEST_COMBO_KEY) || 0);
+  let bestCombo = Number.isFinite(storedBestCombo) && storedBestCombo >= 0 ? Math.floor(storedBestCombo) : 0;
   let openCount = 0;
   let markedCount = 0;
   let refreshTimer = 0;
@@ -89,8 +97,8 @@
     }
     updateHud();
 
-    if (!localStorage.getItem(GUIDE_KEY)) {
-      localStorage.setItem(GUIDE_KEY, "1");
+    if (!safeGet(GUIDE_KEY)) {
+      safeSet(GUIDE_KEY, "1");
       window.setTimeout(() => showToast("탭으로 열고, 길게 눌러 위험 칸을 표시해요", "info"), 350);
     }
   }
@@ -181,7 +189,7 @@
         combo += 1;
         openCount += 1;
         bestCombo = Math.max(bestCombo, combo);
-        localStorage.setItem(BEST_COMBO_KEY, String(bestCombo));
+        safeSet(BEST_COMBO_KEY, String(bestCombo));
         cell.classList.add("is-voltorb-success");
         window.setTimeout(() => cell.classList.remove("is-voltorb-success"), 520);
         navigator.vibrate?.(combo >= 3 ? [18, 24, 18] : 16);
@@ -220,7 +228,8 @@
     refreshTimer = window.setTimeout(enhance, 70);
   }
 
-  new MutationObserver(scheduleEnhance).observe(document.body, { childList: true, subtree: true });
+  const observationRoot = document.getElementById("screen-mine") || document.body;
+  new MutationObserver(scheduleEnhance).observe(observationRoot, { childList: true, subtree: true });
   window.addEventListener("resize", scheduleEnhance, { passive: true });
   scheduleEnhance();
 })();
