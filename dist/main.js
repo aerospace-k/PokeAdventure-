@@ -10,11 +10,13 @@ const lifecycleFrames = new Map();
 function lifecycleNow() {
     return performance.now() - lifecycleAnimationOffset;
 }
-window.setInterval = ((handler, timeout, ...args) => nativeSetInterval(() => {
-    if (!document.hidden && typeof handler === "function")
-        handler(...args);
-}, timeout));
-window.requestAnimationFrame = ((callback) => {
+function appSetInterval(handler, timeout, ...args) {
+    return nativeSetInterval(() => {
+        if (!document.hidden && typeof handler === "function")
+            handler(...args);
+    }, timeout);
+}
+function appRequestAnimationFrame(callback) {
     const frameId = ++lifecycleFrameSequence;
     const run = (timestamp) => {
         if (!lifecycleFrames.has(frameId))
@@ -28,13 +30,13 @@ window.requestAnimationFrame = ((callback) => {
     };
     lifecycleFrames.set(frameId, nativeRequestAnimationFrame(run));
     return frameId;
-});
-window.cancelAnimationFrame = ((frameId) => {
+}
+function appCancelAnimationFrame(frameId) {
     const nativeFrameId = lifecycleFrames.get(frameId);
     if (nativeFrameId !== undefined)
         nativeCancelAnimationFrame(nativeFrameId);
     lifecycleFrames.delete(frameId);
-});
+}
 document.addEventListener("visibilitychange", () => {
     document.documentElement.classList.toggle("app-background-paused", document.hidden);
     if (document.hidden) {
@@ -179,9 +181,11 @@ const MAX_GAME_SECONDS = 10 * 60;
 const STORAGE = {
     name: "amsan_name_v2",
     avatar: "amsan_avatar_v2",
+    trainer: "amsan_trainer_v1",
     records: "amsan_records_v2",
     last: "amsan_last_v2",
-    lifetimeStars: "amsan_lifetime_stars_v1"
+    lifetimeStars: "amsan_lifetime_stars_v1",
+    celebratedPokemon: "amsan_celebrated_pokemon_v1"
 };
 const TRAINER_LEVELS = [
     { level: 1, minStars: 0, title: "새싹 트레이너", reward: "기본 트레이너 카드", dexBonus: 0, tier: "starter" },
@@ -222,6 +226,28 @@ function pokemonUrl(id) {
     return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + id + ".png";
 }
 const TRAINER_SPRITE_BASE = "https://play.pokemonshowdown.com/sprites/trainers/";
+const TRAINER_CHOICES = [
+    { id: "ash", name: "지우", file: "ash.png", region: "관동" },
+    { id: "misty", name: "이슬", file: "misty.png", region: "관동" },
+    { id: "brock", name: "웅이", file: "brock.png", region: "관동" },
+    { id: "red", name: "레드", file: "red.png", region: "관동" },
+    { id: "blue", name: "그린", file: "blue.png", region: "관동" },
+    { id: "leaf", name: "리프", file: "leaf-gen3.png", region: "관동" },
+    { id: "may", name: "봄이", file: "may.png", region: "호연" },
+    { id: "brendan", name: "휘웅", file: "brendan.png", region: "호연" },
+    { id: "dawn", name: "빛나", file: "dawn.png", region: "신오" },
+    { id: "lucas", name: "광휘", file: "lucas.png", region: "신오" },
+    { id: "hilbert", name: "투지", file: "hilbert.png", region: "하나" },
+    { id: "hilda", name: "투희", file: "hilda.png", region: "하나" },
+    { id: "nate", name: "공명", file: "nate.png", region: "하나" },
+    { id: "rosa", name: "명희", file: "rosa.png", region: "하나" },
+    { id: "calem", name: "칼름", file: "calem.png", region: "칼로스" },
+    { id: "serena", name: "세레나", file: "serena.png", region: "칼로스" },
+    { id: "elio", name: "영태", file: "elio.png", region: "알로라" },
+    { id: "selene", name: "미월", file: "selene.png", region: "알로라" },
+    { id: "lillie", name: "릴리에", file: "lillie.png", region: "알로라" },
+    { id: "rocket", name: "로켓단 로사·로이", file: "jessiejames-gen1.png", region: "로켓단" }
+];
 function trainerMedia(file, name, className = "") {
     const wrapper = document.createElement("span");
     wrapper.className = "trainer-media" + (className ? " " + className : "");
@@ -302,6 +328,23 @@ function safeRemove(key) {
     }
     catch { /* 저장 차단 시 무시 */ }
 }
+async function fetchWithTimeout(input, init = {}, timeoutMs = 9000) {
+    const controller = new AbortController();
+    const upstreamSignal = init.signal;
+    const relayAbort = () => controller.abort(upstreamSignal?.reason);
+    if (upstreamSignal?.aborted)
+        relayAbort();
+    else
+        upstreamSignal?.addEventListener("abort", relayAbort, { once: true });
+    const timeout = window.setTimeout(() => controller.abort(new DOMException("Request timed out", "TimeoutError")), timeoutMs);
+    try {
+        return await fetch(input, { ...init, signal: controller.signal });
+    }
+    finally {
+        window.clearTimeout(timeout);
+        upstreamSignal?.removeEventListener("abort", relayAbort);
+    }
+}
 function getName() {
     return (safeGet(STORAGE.name) ?? "").replace(/[<>&]/g, "").slice(0, 6);
 }
@@ -345,6 +388,18 @@ function setAvatarId(id) {
     if (POKEMON.some((pokemon) => pokemon.id === id))
         safeSet(STORAGE.avatar, String(id));
 }
+function getTrainerChoice() {
+    const saved = safeGet(STORAGE.trainer);
+    return TRAINER_CHOICES.find((trainer) => trainer.id === saved) ?? TRAINER_CHOICES[0];
+}
+function hasSavedTrainer() {
+    const saved = safeGet(STORAGE.trainer);
+    return TRAINER_CHOICES.some((trainer) => trainer.id === saved);
+}
+function setTrainerChoice(id) {
+    if (TRAINER_CHOICES.some((trainer) => trainer.id === id))
+        safeSet(STORAGE.trainer, id);
+}
 function readRecords() {
     const raw = safeGet(STORAGE.records);
     if (!raw)
@@ -355,17 +410,11 @@ function readRecords() {
             safeRemove(STORAGE.records);
             return [];
         }
-        return parsed.filter((item) => {
-            if (!item || typeof item !== "object")
-                return false;
-            const row = item;
-            return typeof row.name === "string"
-                && VALID_MODES.has(row.mode)
-                && Number.isInteger(row.grade) && Number(row.grade) >= 0 && Number(row.grade) <= 6
-                && VALID_DIFFS.has(row.diff)
-                && Number.isFinite(row.score) && Number.isFinite(row.stars)
-                && typeof row.detail === "string" && Number.isFinite(row.timestamp);
-        }).slice(0, 60);
+        const records = parsed.map((item) => sanitizeRecord(item)).filter((item) => item !== null).slice(0, 60);
+        const normalized = JSON.stringify(records);
+        if (normalized !== raw)
+            safeSet(STORAGE.records, normalized);
+        return records;
     }
     catch {
         safeRemove(STORAGE.records);
@@ -379,6 +428,33 @@ function saveRecord(entry) {
     safeSet(STORAGE.records, JSON.stringify(records));
     updateSideInfo();
     void uploadSharedRecords([entry]);
+}
+function sanitizeRecord(value, coerceNumbers = false) {
+    if (!value || typeof value !== "object")
+        return null;
+    const row = value;
+    const numberValue = (candidate) => coerceNumbers ? Number(candidate) : typeof candidate === "number" ? candidate : Number.NaN;
+    const grade = numberValue(row.grade);
+    const score = numberValue(row.score);
+    const stars = numberValue(row.stars);
+    const timestamp = numberValue(row.timestamp);
+    if (typeof row.name !== "string" || !VALID_MODES.has(row.mode) || !VALID_DIFFS.has(row.diff))
+        return null;
+    if (!Number.isInteger(grade) || grade < 0 || grade > 6 || !Number.isFinite(score) || !Number.isFinite(stars) || !Number.isFinite(timestamp))
+        return null;
+    if (typeof row.detail !== "string" || timestamp <= 0)
+        return null;
+    const cleanName = row.name.trim().replace(/[<>&]/g, "").slice(0, 20) || "친구";
+    return {
+        name: cleanName,
+        mode: row.mode,
+        grade,
+        diff: row.diff,
+        score: Math.max(0, Math.min(10000000, Math.floor(score))),
+        stars: Math.max(0, Math.min(3, Math.floor(stars))),
+        detail: row.detail.slice(0, 100),
+        timestamp: Math.min(Date.now() + 86400000, Math.floor(timestamp))
+    };
 }
 function leaderboardServerConfig() {
     const config = window.POKE_LEADERBOARD_SERVER;
@@ -396,7 +472,7 @@ function sharedRecordKey(entry) {
         hash = Math.imul(hash ^ source.charCodeAt(index), 16777619);
     return "record-" + (hash >>> 0).toString(36) + "-" + Math.floor(entry.timestamp).toString(36);
 }
-async function uploadSharedRecords(entries) {
+async function uploadSharedRecords(entries, signal) {
     const config = leaderboardServerConfig();
     if (!config || !entries.length)
         return false;
@@ -409,36 +485,30 @@ async function uploadSharedRecords(entries) {
     if (!rows.length)
         return false;
     try {
-        const response = await fetch(config.apiUrl + "/leaderboard", {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ records: rows })
-        });
+        const response = await fetchWithTimeout(config.apiUrl + "/leaderboard", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ records: rows }), signal
+        }, 8000);
         return response.ok;
     }
     catch {
         return false;
     }
 }
-async function readSharedRecords(mode) {
+async function readSharedRecords(mode, signal) {
     const config = leaderboardServerConfig();
     if (!config)
         return [];
     const params = new URLSearchParams({ limit: "1000" });
     if (mode !== null)
         params.set("mode", mode);
-    const response = await fetch(config.apiUrl + "/leaderboard?" + params.toString());
+    const response = await fetchWithTimeout(config.apiUrl + "/leaderboard?" + params.toString(), { signal }, 8000);
     if (!response.ok)
         throw new Error("Shared leaderboard request failed");
     const payload = await response.json();
     const rows = payload && typeof payload === "object" && "records" in payload ? payload.records : [];
     if (!Array.isArray(rows))
         return [];
-    return rows.filter((row) => typeof row.name === "string" && typeof row.mode === "string" && row.mode in MODES
-        && Number.isFinite(Number(row.grade)) && ["easy", "normal", "hard"].includes(String(row.diff))
-        && Number.isFinite(Number(row.score)) && Number.isFinite(Number(row.stars)) && typeof row.detail === "string"
-        && Number.isFinite(Number(row.timestamp))).map((row) => ({
-        name: String(row.name).slice(0, 20), mode: String(row.mode), grade: Number(row.grade), diff: String(row.diff),
-        score: Number(row.score), stars: Number(row.stars), detail: String(row.detail).slice(0, 100), timestamp: Number(row.timestamp)
-    }));
+    return rows.map((row) => sanitizeRecord(row, true)).filter((row) => row !== null);
 }
 function getLifetimeStars() {
     const recordStars = readRecords().reduce((sum, record) => sum + Math.max(0, Math.min(3, Math.floor(record.stars))), 0);
@@ -673,7 +743,7 @@ function startMusic() {
         return;
     let index = 0;
     const notes = [262, 330, 392, 330, 349, 440, 392, 330];
-    musicTimer = window.setInterval(() => {
+    musicTimer = appSetInterval(() => {
         if (musicEnabled) {
             musicNote(notes[index % notes.length]);
             index += 1;
@@ -691,6 +761,9 @@ function showToast(message) {
     toast.classList.add("show");
     window.setTimeout(() => toast.classList.remove("show"), 2200);
 }
+window.addEventListener("poke-update-ready", () => {
+    showToast("새 버전이 준비됐어요. 다음 실행부터 자동으로 적용돼요.");
+});
 const state = { grade: null, mode: null, diff: "easy" };
 function showScreen(name) {
     document.querySelectorAll(".screen").forEach((screen) => screen.classList.remove("active"));
@@ -710,11 +783,12 @@ function syncMoreMenuAccessibility() {
     const more = byId("sideMoreMenu");
     const panel = byId("sideMorePanel");
     const backdrop = byId("moreMenuBackdrop");
+    more.querySelector("summary")?.setAttribute("aria-expanded", String(more.open));
     panel?.toggleAttribute("inert", !more.open);
     panel?.setAttribute("aria-hidden", String(!more.open));
     backdrop.toggleAttribute("inert", !more.open);
     backdrop.setAttribute("aria-hidden", String(!more.open));
-    document.body.classList.toggle("more-menu-open", more.open && window.matchMedia("(max-width: 1024px)").matches);
+    document.body.classList.toggle("more-menu-open", more.open);
 }
 function closeMoreMenu(restoreFocus = false) {
     const more = byId("sideMoreMenu");
@@ -739,8 +813,9 @@ function updateSideInfo() {
     byId("sideTitle").textContent = progress.current.title;
     byId("sideStars").textContent = progress.next ? "별 " + stars + "개 · 다음 레벨까지 " + progress.remaining + "개" : "별 " + stars + "개 · 최고 레벨 달성";
     replaceWithPokemon(byId("sideMascot"), getAvatarId());
-    replaceWithTrainer(byId("sideTrainer"), "ash.png", "지우");
-    byId("playerCard").setAttribute("aria-label", trainerName + " · 레벨 " + progress.current.level + " " + progress.current.title + " · 아바타 바꾸기");
+    const selectedTrainer = getTrainerChoice();
+    replaceWithTrainer(byId("sideTrainer"), selectedTrainer.file, selectedTrainer.name);
+    byId("playerCard").setAttribute("aria-label", trainerName + " · 레벨 " + progress.current.level + " " + progress.current.title + " · 파트너 포켓몬과 " + selectedTrainer.name + " 트레이너 바꾸기");
     const card = byId("levelCard");
     card.replaceChildren();
     const title = document.createElement("strong");
@@ -1034,8 +1109,23 @@ function discoveredPokemonCountAtStars(stars) {
 function discoveredPokemonCount() {
     return discoveredPokemonCountAtStars(getLifetimeStars());
 }
+function celebratedPokemonCount() {
+    const discovered = discoveredPokemonCount();
+    const raw = safeGet(STORAGE.celebratedPokemon);
+    const stored = raw === null || raw.trim() === "" ? Number.NaN : Number(raw);
+    if (Number.isFinite(stored) && stored >= 0)
+        return Math.min(discovered, Math.floor(stored));
+    const initial = discovered > 5 ? discovered - 1 : discovered;
+    safeSet(STORAGE.celebratedPokemon, String(initial));
+    return initial;
+}
+function markPokemonDiscoveryCelebrated(count = discoveredPokemonCount()) {
+    safeSet(STORAGE.celebratedPokemon, String(Math.max(0, Math.min(POKEMON.length, Math.floor(count)))));
+}
 let pokedexFilter = "all";
 let pokedexQuery = "";
+let pokedexDetailRequest = 0;
+let pokedexDetailController = null;
 function renderPokedexGrid(unlocked) {
     const grid = byId("pokedexGrid");
     const query = pokedexQuery.trim().toLocaleLowerCase("ko-KR");
@@ -1095,8 +1185,12 @@ function renderPokedexGrid(unlocked) {
 }
 function openPokedex() {
     cleanupGame();
+    pokedexDetailController?.abort();
+    pokedexDetailController = null;
+    pokedexDetailRequest += 1;
     setActiveNav("pokedex");
     const unlocked = discoveredPokemonCount();
+    const celebrated = celebratedPokemonCount();
     byId("pokedexCount").textContent = unlocked + " / " + POKEMON.length + " 발견";
     byId("pokedexSearch").value = pokedexQuery;
     renderPokedexGrid(unlocked);
@@ -1137,8 +1231,16 @@ function openPokedex() {
     copy.append(kicker, title, message, progress, stats, tip);
     detail.append(oak, copy);
     showScreen("pokedex");
+    if (unlocked > celebrated) {
+        const missedDiscoveries = POKEMON.slice(celebrated, unlocked);
+        window.setTimeout(() => showPokemonDiscoveryPopup(missedDiscoveries), 520);
+    }
 }
 async function loadPokedexDetail(pokemon, selected) {
+    pokedexDetailController?.abort();
+    const controller = new AbortController();
+    pokedexDetailController = controller;
+    const request = ++pokedexDetailRequest;
     document.querySelectorAll(".pokedex-entry").forEach((entry) => entry.classList.remove("selected"));
     selected.classList.add("selected");
     const detail = byId("pokedexDetail");
@@ -1153,13 +1255,15 @@ async function loadPokedexDetail(pokemon, selected) {
     playPokemonCry(pokemon.id, .18);
     try {
         const [pokemonResponse, speciesResponse] = await Promise.all([
-            fetch("https://pokeapi.co/api/v2/pokemon/" + pokemon.id),
-            fetch("https://pokeapi.co/api/v2/pokemon-species/" + pokemon.id)
+            fetchWithTimeout("https://pokeapi.co/api/v2/pokemon/" + pokemon.id, { signal: controller.signal }, 10000),
+            fetchWithTimeout("https://pokeapi.co/api/v2/pokemon-species/" + pokemon.id, { signal: controller.signal }, 10000)
         ]);
         if (!pokemonResponse.ok || !speciesResponse.ok)
             throw new Error("PokeAPI response error");
         const data = await pokemonResponse.json();
         const species = await speciesResponse.json();
+        if (request !== pokedexDetailRequest || controller.signal.aborted)
+            return;
         const genus = species.genera.find((entry) => entry.language.name === "ko")?.genus ?? "포켓몬";
         const flavor = species.flavor_text_entries.find((entry) => entry.language.name === "ko")?.flavor_text.replace(/[\n\f]/g, " ") ?? "도감 설명을 준비하고 있어요.";
         detail.replaceChildren();
@@ -1204,10 +1308,16 @@ async function loadPokedexDetail(pokemon, selected) {
         detail.append(typeArtwork, image, heading, description, facts);
     }
     catch {
+        if (request !== pokedexDetailRequest || controller.signal.aborted)
+            return;
         detail.replaceChildren();
         const fallback = document.createElement("p");
         fallback.textContent = "인터넷 연결이 원활하지 않아 상세 정보를 불러오지 못했어요. 잠시 후 다시 선택해 주세요.";
         detail.append(fallback);
+    }
+    finally {
+        if (request === pokedexDetailRequest)
+            pokedexDetailController = null;
     }
 }
 function reportMetric(value, label) {
@@ -1487,7 +1597,7 @@ function startQuiz() {
     replaceWithPokemon(byId("quizMascot"), 25);
     showScreen("quiz");
     showThemedGameScene("quiz", "피카츄 암산 수업", "빈 칠판에 나타나는 문제를 해결해요!", 1200);
-    quiz.timer = window.setInterval(updateQuizTimer, 500);
+    quiz.timer = appSetInterval(updateQuizTimer, 500);
     nextQuizQuestion();
 }
 function updateQuizTimer() {
@@ -1661,7 +1771,7 @@ function stopRain() {
         return;
     rain.running = false;
     if (rain.raf)
-        cancelAnimationFrame(rain.raf);
+        appCancelAnimationFrame(rain.raf);
     if (rain.watchdog)
         window.clearInterval(rain.watchdog);
 }
@@ -1688,7 +1798,7 @@ function startRain() {
         const field = byId("rainField");
         if (field.clientWidth < 240 || field.clientHeight < 160) {
             session.lastFrame = lifecycleNow();
-            session.raf = requestAnimationFrame(launchRain);
+            session.raf = appRequestAnimationFrame(launchRain);
             return;
         }
         if (session.drops.length === 0)
@@ -1696,10 +1806,10 @@ function startRain() {
         const launchedAt = lifecycleNow();
         session.lastSpawn = launchedAt;
         session.lastFrame = launchedAt;
-        session.raf = requestAnimationFrame(rainFrame);
+        session.raf = appRequestAnimationFrame(rainFrame);
     };
-    rain.raf = requestAnimationFrame(launchRain);
-    rain.watchdog = window.setInterval(() => {
+    rain.raf = appRequestAnimationFrame(launchRain);
+    rain.watchdog = appSetInterval(() => {
         if (!rain?.running || document.hidden)
             return;
         const now = lifecycleNow();
@@ -1714,9 +1824,9 @@ function startRain() {
         }
         if (now - rain.lastFrame >= 1800) {
             if (rain.raf)
-                cancelAnimationFrame(rain.raf);
+                appCancelAnimationFrame(rain.raf);
             rain.lastFrame = now;
-            rain.raf = requestAnimationFrame(rainFrame);
+            rain.raf = appRequestAnimationFrame(rainFrame);
         }
     }, 750);
 }
@@ -1727,7 +1837,7 @@ function rainFrame(now) {
     const height = field.clientHeight;
     if (field.clientWidth < 240 || height < 160) {
         rain.lastFrame = now;
-        rain.raf = requestAnimationFrame(rainFrame);
+        rain.raf = appRequestAnimationFrame(rainFrame);
         return;
     }
     let delta = (now - rain.lastFrame) / 1000;
@@ -1774,7 +1884,7 @@ function rainFrame(now) {
     byId("rainSpeed").textContent = multiplier.toFixed(1);
     renderRainHud();
     if (rain.running)
-        rain.raf = requestAnimationFrame(rainFrame);
+        rain.raf = appRequestAnimationFrame(rainFrame);
 }
 function spawnRainDrop() {
     if (!rain?.running)
@@ -1907,7 +2017,7 @@ function finishRain() {
     rain.finished = true;
     rain.running = false;
     if (rain.raf)
-        cancelAnimationFrame(rain.raf);
+        appCancelAnimationFrame(rain.raf);
     const game = rain;
     const seconds = Math.floor((lifecycleNow() - game.started) / 1000);
     const stars = game.popped >= 18 ? 3 : game.popped >= 10 ? 2 : game.popped >= 4 ? 1 : 0;
@@ -1974,7 +2084,7 @@ function startMole() {
     renderMoleHud();
     showScreen("mole");
     showThemedGameScene("mole", "디그다 동굴 탐험", "정답을 품은 디그다를 빠르게 찾아요!", 900);
-    mole.countdown = window.setInterval(moleTick, 1000);
+    mole.countdown = appSetInterval(moleTick, 1000);
     scheduleMole();
 }
 function moleSpeedFactor() {
@@ -2179,7 +2289,7 @@ function startMemory() {
     renderMemoryHud();
     showScreen("memory");
     showThemedGameScene("memory", "메타몽 메모리 게임", "변신한 포켓몬의 위치를 기억해 짝을 찾아요!", 900);
-    memory.countdown = window.setInterval(() => {
+    memory.countdown = appSetInterval(() => {
         if (!memory?.running)
             return;
         renderMemoryHud();
@@ -2388,7 +2498,7 @@ function startOx() {
     renderOxHud();
     showScreen("ox");
     showThemedGameScene("ox", "고라파덕 오류 탐정", "계산 속에 숨은 실수를 한 번에 찾아내요!", 900);
-    ox.countdown = window.setInterval(() => {
+    ox.countdown = appSetInterval(() => {
         if (!ox?.running)
             return;
         ox.time = Math.max(0, ox.time - 1);
@@ -2562,7 +2672,7 @@ function stopBalloon() {
         return;
     balloon.running = false;
     if (balloon.raf)
-        cancelAnimationFrame(balloon.raf);
+        appCancelAnimationFrame(balloon.raf);
     if (balloon.countdown !== null)
         window.clearInterval(balloon.countdown);
 }
@@ -2581,7 +2691,7 @@ function startBalloon() {
     balloon.lastSpawn = visibleAt;
     launchBalloonWave();
     showThemedGameScene("balloon", "푸린 하늘 콘서트", "정답 풍선만 찾아 멋진 노래를 완성해요!", 850);
-    balloon.countdown = window.setInterval(() => {
+    balloon.countdown = appSetInterval(() => {
         if (!balloon?.running)
             return;
         balloon.time = Math.max(0, balloon.time - 1);
@@ -2589,7 +2699,7 @@ function startBalloon() {
         if (balloon.time <= 0)
             finishBalloon();
     }, 1000);
-    balloon.raf = requestAnimationFrame(balloonFrame);
+    balloon.raf = appRequestAnimationFrame(balloonFrame);
 }
 function balloonFrame(now) {
     if (!balloon?.running)
@@ -2617,7 +2727,7 @@ function balloonFrame(now) {
         }
     }
     byId("balloonSpeed").textContent = multiplier.toFixed(1);
-    balloon.raf = requestAnimationFrame(balloonFrame);
+    balloon.raf = appRequestAnimationFrame(balloonFrame);
 }
 function spawnBalloon(forceCorrect, laneIndex) {
     if (!balloon)
@@ -3390,7 +3500,7 @@ function startSpace() {
     space = { running: true, locked: false, index: 0, score: 0, correct: 0, streak: 0, best: 0, started: Date.now(), timer: null, nextTimer: null, current: null };
     showScreen("space");
     showThemedGameScene("space", "나몰빼미 도형 공간 탐험", "숲의 단서를 관찰하고 공간 문제를 해결해요!", 1000);
-    space.timer = window.setInterval(() => {
+    space.timer = appSetInterval(() => {
         if (!space?.running)
             return;
         renderSpaceHud();
@@ -3530,7 +3640,7 @@ function stopSnack() {
     if (snack.startTimer !== null)
         window.clearTimeout(snack.startTimer);
     if (snack.raf !== null)
-        cancelAnimationFrame(snack.raf);
+        appCancelAnimationFrame(snack.raf);
     if (snack.spawnTimer !== null)
         window.clearInterval(snack.spawnTimer);
     if (snack.countdown !== null)
@@ -3557,11 +3667,11 @@ function startSnack() {
         byId("snackSceneIntro").classList.remove("show");
         snack.lastFrame = performance.now();
         spawnSnackItem();
-        snack.spawnTimer = window.setInterval(spawnSnackItem, 680);
-        snack.countdown = window.setInterval(() => { if (!snack?.running)
+        snack.spawnTimer = appSetInterval(spawnSnackItem, 680);
+        snack.countdown = appSetInterval(() => { if (!snack?.running)
             return; snack.time = Math.max(0, snack.time - 1); renderSnackHud(); if (snack.time <= 0)
             finishSnack(); }, 1000);
-        snack.raf = requestAnimationFrame(snackFrame);
+        snack.raf = appRequestAnimationFrame(snackFrame);
     }, 1600);
 }
 function showSnackFinishScene(outOfLives, caught) {
@@ -3626,7 +3736,7 @@ function snackFrame(now) {
             snack.items.splice(index, 1);
         }
     }
-    snack.raf = requestAnimationFrame(snackFrame);
+    snack.raf = appRequestAnimationFrame(snackFrame);
 }
 function animateSnackEating(player, item) {
     const token = String(performance.now());
@@ -3934,7 +4044,7 @@ function renderCoordinate() {
 function armCoordinateTimer() {
     if (!coordinate)
         return;
-    coordinate.timer = window.setInterval(() => {
+    coordinate.timer = appSetInterval(() => {
         if (!coordinate?.running || coordinate.transitioning)
             return;
         coordinate.timeLeft -= 1;
@@ -4735,7 +4845,7 @@ function startKnowledge(reviewQuestions) {
     replaceWithPokemon(byId("knowledgePartner"), 151);
     showScreen("knowledge");
     nextKnowledgeQuestion();
-    knowledge.timer = window.setInterval(() => {
+    knowledge.timer = appSetInterval(() => {
         if (!knowledge?.running)
             return;
         renderKnowledgeHud();
@@ -4980,7 +5090,7 @@ function startMine() {
     setupMineStage(0);
     showScreen("mine");
     showThemedGameScene("mine", "찌리리공 초원 수색", "안전한 칸을 열고 숨은 찌리리공을 표시해요!", 1100);
-    mine.timer = window.setInterval(() => {
+    mine.timer = appSetInterval(() => {
         if (!mine?.running)
             return;
         renderMineHud();
@@ -5254,6 +5364,12 @@ function finishMine(won) {
     showResult(stars, won ? "찌리리공 탐색 완료!" : "찌리리공을 만났어요", won ? "세 개의 루트를 모두 안전하게 통과했어요." : "숫자 단서를 다시 살펴보면 다음에는 피할 수 있어요.", [[String(game.score), "점수"], [completed + "/3", "완료 루트"], [seconds + "초", "시간"], [String(game.flags), "표시"]]);
 }
 function cleanupGame() {
+    pokedexDetailController?.abort();
+    pokedexDetailController = null;
+    pokedexDetailRequest += 1;
+    leaderboardController?.abort();
+    leaderboardController = null;
+    leaderboardRequest += 1;
     stopQuiz();
     stopRain();
     stopMole();
@@ -5269,7 +5385,19 @@ function cleanupGame() {
     stopSafety();
     stopSnack();
     quiz = null;
+    rain = null;
+    mole = null;
+    memory = null;
+    ox = null;
+    balloon = null;
+    space = null;
+    mine = null;
     knowledge = null;
+    symmetry = null;
+    coordinate = null;
+    historyGame = null;
+    safety = null;
+    snack = null;
 }
 let levelUpPopupTimer = null;
 let pokemonDiscoveryPopupTimer = null;
@@ -5298,6 +5426,7 @@ function showPokemonDiscoveryPopup(pokemonList, afterClose) {
         window.clearTimeout(pokemonDiscoveryPopupTimer);
     document.querySelector(".pokemon-discovery-overlay")?.remove();
     pokemonDiscoveryAfterClose = afterClose ?? null;
+    markPokemonDiscoveryCelebrated();
     const overlay = document.createElement("div");
     overlay.className = "pokemon-discovery-overlay";
     overlay.setAttribute("role", "dialog");
@@ -5584,6 +5713,7 @@ function openRecords() {
 }
 let leaderboardRequest = 0;
 let localLeaderboardSynced = false;
+let leaderboardController = null;
 function rankingAvatarPokemon(name) {
     let hash = 0;
     for (let index = 0; index < name.length; index += 1)
@@ -5677,6 +5807,9 @@ function paintLeaderboard(rows, mode) {
     });
 }
 async function renderLeaderboard() {
+    leaderboardController?.abort();
+    const controller = new AbortController();
+    leaderboardController = controller;
     const request = ++leaderboardRequest;
     const refresh = byId("rankingRefresh");
     refresh.disabled = true;
@@ -5689,14 +5822,15 @@ async function renderLeaderboard() {
         note.textContent = "공용 순위표 설정 전이에요. 현재는 이 브라우저의 기록을 표시합니다.";
         refresh.disabled = false;
         refresh.classList.remove("loading");
+        leaderboardController = null;
         return;
     }
     note.textContent = "다른 기기의 트레이너 기록을 불러오고 있어요...";
     try {
         if (!localLeaderboardSynced) {
-            localLeaderboardSynced = await uploadSharedRecords(readRecords());
+            localLeaderboardSynced = await uploadSharedRecords(readRecords(), controller.signal);
         }
-        const sharedRecords = await readSharedRecords(mode);
+        const sharedRecords = await readSharedRecords(mode, controller.signal);
         if (request !== leaderboardRequest)
             return;
         paintLeaderboard(rankingRows(mode, sharedRecords), mode);
@@ -5707,9 +5841,12 @@ async function renderLeaderboard() {
             return;
         note.textContent = "공용 순위표에 연결하지 못해 이 브라우저의 기록을 표시합니다.";
     }
-    if (request === leaderboardRequest) {
-        refresh.disabled = false;
-        refresh.classList.remove("loading");
+    finally {
+        if (request === leaderboardRequest) {
+            refresh.disabled = false;
+            refresh.classList.remove("loading");
+            leaderboardController = null;
+        }
     }
 }
 function openLeaderboard() {
@@ -5797,36 +5934,92 @@ function openAbout() {
 }
 let avatarChanging = false;
 let nameChanging = false;
-function showAvatarPicker(changing) {
+let identityPickerStep = "pokemon";
+function renderIdentityPicker() {
+    const pokemonStep = identityPickerStep === "pokemon";
+    const pokemonTab = byId("pokemonPickerTab");
+    const trainerTab = byId("trainerPickerTab");
+    pokemonTab.classList.toggle("active", pokemonStep);
+    trainerTab.classList.toggle("active", !pokemonStep);
+    pokemonTab.setAttribute("aria-selected", String(pokemonStep));
+    trainerTab.setAttribute("aria-selected", String(!pokemonStep));
+    trainerTab.disabled = !avatarChanging && !hasSavedAvatar();
+    byId("avatarPickerTitle").textContent = pokemonStep
+        ? "함께 공부할 포켓몬을 골라요"
+        : "상단에 표시할 트레이너를 골라요";
+    byId("avatarCountText").textContent = pokemonStep
+        ? "기본형과 인기 진화형 포켓몬 " + POKEMON.length + "종"
+        : "인기 트레이너 " + TRAINER_CHOICES.length + "명 · 로켓단 포함";
+    byId("identityPickerHint").textContent = avatarChanging
+        ? "두 탭을 오가며 원하는 조합을 선택한 뒤 선택 완료를 눌러요."
+        : pokemonStep
+            ? "파트너 포켓몬을 선택하면 트레이너 선택으로 이어져요."
+            : "마음에 드는 트레이너를 선택하면 모험이 시작돼요.";
+    const grid = byId("avatarGrid");
+    grid.replaceChildren();
+    if (pokemonStep)
+        POKEMON.forEach((pokemon) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "avatar-button" + (pokemon.id === getAvatarId() ? " selected" : "");
+            button.setAttribute("aria-label", pokemon.name + " 선택");
+            button.append(pokemonAvatarMedia(pokemon));
+            const label = document.createElement("small");
+            label.textContent = pokemon.name;
+            button.append(label);
+            button.addEventListener("click", () => {
+                setAvatarId(pokemon.id);
+                selectSound();
+                playPokemonCry(pokemon.id, .18);
+                if (avatarChanging)
+                    renderIdentityPicker();
+                else
+                    setIdentityPickerStep("trainer");
+            });
+            grid.append(button);
+        });
+    if (!pokemonStep)
+        TRAINER_CHOICES.forEach((trainer) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.dataset.trainerId = trainer.id;
+            button.className = "avatar-button trainer-choice-button" + (trainer.id === getTrainerChoice().id ? " selected" : "");
+            button.setAttribute("aria-label", trainer.name + " 트레이너 선택 · " + trainer.region);
+            button.append(trainerMedia(trainer.file, trainer.name, "trainer-choice-media"));
+            const label = document.createElement("small");
+            const name = document.createElement("b");
+            name.textContent = trainer.name;
+            const region = document.createElement("em");
+            region.textContent = trainer.region;
+            label.append(name, region);
+            button.append(label);
+            button.addEventListener("click", () => {
+                setTrainerChoice(trainer.id);
+                selectSound();
+                if (avatarChanging)
+                    renderIdentityPicker();
+                else
+                    enterApp();
+            });
+            grid.append(button);
+        });
+}
+function setIdentityPickerStep(step) {
+    if (step === "trainer" && !avatarChanging && !hasSavedAvatar())
+        return;
+    identityPickerStep = step;
+    renderIdentityPicker();
+    byId("avatarGrid").scrollTop = 0;
+}
+function showAvatarPicker(changing, step = "pokemon") {
     avatarChanging = changing;
-    byId("avatarCountText").textContent = "기본형과 인기 진화형 포켓몬 " + POKEMON.length + "종";
+    identityPickerStep = step;
     byId("introStage").classList.add("hidden-panel");
     byId("nameEntry").classList.add("hidden-panel");
     byId("avatarPick").classList.remove("hidden-panel");
     const close = byId("closeAvatar");
-    close.classList.toggle("hidden-panel", !changing && !hasSavedAvatar());
-    const grid = byId("avatarGrid");
-    grid.replaceChildren();
-    POKEMON.forEach((pokemon) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "avatar-button" + (pokemon.id === getAvatarId() ? " selected" : "");
-        button.setAttribute("aria-label", pokemon.name + " 선택");
-        button.append(pokemonAvatarMedia(pokemon));
-        const label = document.createElement("small");
-        label.textContent = pokemon.name;
-        button.append(label);
-        button.addEventListener("click", () => {
-            setAvatarId(pokemon.id);
-            selectSound();
-            playPokemonCry(pokemon.id, .18);
-            if (avatarChanging)
-                closeAvatarPicker();
-            else
-                enterApp();
-        });
-        grid.append(button);
-    });
+    close.classList.toggle("hidden-panel", !changing);
+    renderIdentityPicker();
 }
 function closeAvatarPicker() {
     avatarChanging = false;
@@ -5918,10 +6111,10 @@ function bindEvents() {
     byId("introNext").addEventListener("click", () => {
         ensureAudio();
         if (isAllowedTrainerName(getName())) {
-            if (hasSavedAvatar())
+            if (hasSavedAvatar() && hasSavedTrainer())
                 enterApp();
             else
-                showAvatarPicker(false);
+                showAvatarPicker(false, hasSavedAvatar() ? "trainer" : "pokemon");
         }
         else
             showNameForm(false);
@@ -5936,10 +6129,10 @@ function bindEvents() {
         clearAccessMessage();
         nameChanging = false;
         setName(enteredName);
-        if (hasSavedAvatar())
+        if (hasSavedAvatar() && hasSavedTrainer())
             enterApp();
         else
-            showAvatarPicker(false);
+            showAvatarPicker(false, hasSavedAvatar() ? "trainer" : "pokemon");
     });
     byId("nameInput").addEventListener("input", clearAccessMessage);
     byId("cancelNameChange").addEventListener("click", () => {
@@ -5955,33 +6148,17 @@ function bindEvents() {
         cleanupGame();
         byId("app").classList.add("hidden-panel");
         byId("introOverlay").classList.remove("hidden-panel");
-        showAvatarPicker(true);
+        showAvatarPicker(true, "pokemon");
     });
+    byId("pokemonPickerTab").addEventListener("click", () => setIdentityPickerStep("pokemon"));
+    byId("trainerPickerTab").addEventListener("click", () => setIdentityPickerStep("trainer"));
     byId("closeAvatar").addEventListener("click", closeAvatarPicker);
     const sideMoreMenu = byId("sideMoreMenu");
     const sideMoreSummary = sideMoreMenu.querySelector("summary");
     const sideMorePanel = byId("sideMorePanel");
     const sideMoreBackdrop = byId("moreMenuBackdrop");
-    const sideMoreHome = document.createComment("side-more-home");
-    sideMoreMenu.insertBefore(sideMoreHome, sideMoreBackdrop);
-    const placeMoreMenu = () => {
-        if (window.matchMedia("(max-width: 1024px)").matches) {
-            document.body.append(sideMoreBackdrop, sideMorePanel);
-        }
-        else if (sideMoreHome.parentNode === sideMoreMenu) {
-            sideMoreMenu.insertBefore(sideMoreBackdrop, sideMoreHome.nextSibling);
-            sideMoreMenu.insertBefore(sideMorePanel, sideMoreBackdrop.nextSibling);
-        }
-        syncMoreMenuAccessibility();
-    };
-    placeMoreMenu();
-    window.matchMedia("(max-width: 1024px)").addEventListener("change", () => {
-        closeMoreMenu();
-        placeMoreMenu();
-    });
+    document.body.append(sideMoreBackdrop, sideMorePanel);
     sideMoreSummary?.addEventListener("click", (event) => {
-        if (!window.matchMedia("(max-width: 1024px)").matches)
-            return;
         event.preventDefault();
         sideMoreMenu.open = !sideMoreMenu.open;
         syncMoreMenuAccessibility();
@@ -5989,7 +6166,13 @@ function bindEvents() {
     sideMoreMenu.addEventListener("toggle", syncMoreMenuAccessibility);
     syncMoreMenuAccessibility();
     byId("closeMoreMenu").addEventListener("click", () => closeMoreMenu(true));
-    byId("moreMenuBackdrop").addEventListener("click", () => closeMoreMenu(true));
+    const closeMoreFromBackdrop = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeMoreMenu(false);
+    };
+    sideMoreBackdrop.addEventListener("pointerup", closeMoreFromBackdrop);
+    sideMoreBackdrop.addEventListener("click", closeMoreFromBackdrop);
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && byId("sideMoreMenu").open)
             closeMoreMenu(true);
@@ -6215,8 +6398,11 @@ const installCoordinateRuleDock = () => {
         updateQueued = true;
         window.requestAnimationFrame(syncRuleDock);
     };
+    const coordinateScreen = document.querySelector("#screen-coordinate");
+    if (!coordinateScreen)
+        return;
     const observer = new MutationObserver(queueRuleDockUpdate);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    observer.observe(coordinateScreen, { childList: true, subtree: true, characterData: true });
     queueRuleDockUpdate();
 };
 if (document.readyState === "loading") {
@@ -6228,13 +6414,16 @@ else {
 /* codex:pikachu-quiz-polish */
 const installCodexPikachuQuizPolish = () => {
     let scanQueued = false;
+    const quizScreen = document.querySelector("#screen-quiz");
+    if (!quizScreen)
+        return;
     const queueScan = () => {
         if (scanQueued)
             return;
         scanQueued = true;
         requestAnimationFrame(() => {
             scanQueued = false;
-            const marker = Array.from(document.querySelectorAll("body *")).find((element) => {
+            const marker = Array.from(quizScreen.querySelectorAll("*")).find((element) => {
                 const text = (element.textContent || "").trim();
                 return element.children.length === 0 && /PIKACHU POWER TRAINING/i.test(text);
             });
@@ -6295,7 +6484,7 @@ const installCodexPikachuQuizPolish = () => {
         });
     };
     const observer = new MutationObserver(queueScan);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    observer.observe(quizScreen, { childList: true, subtree: true, characterData: true });
     queueScan();
 };
 if (document.readyState === "loading") {
