@@ -11,7 +11,7 @@
   <link rel="shortcut icon" href="./assets/pokeball-favicon-32.png?v=1.0.20260726.6">
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/pokeball-apple-touch-icon.png?v=1.0.20260726.6">
   <link rel="manifest" href="./site.webmanifest?v=1.0.20260726.6">
-  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260729.3">
+  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260729.7">
   <script>document.documentElement.dataset.introScene = Math.random() < 0.5 ? "adventure" : "rocket";</script>
   <meta name="application-name" content="포켓몬 배움 탐험대">
   <meta name="app-version" content="1.0">
@@ -430,7 +430,7 @@
             <div id="safetyMascot" class="lab-pokemon"></div>
             <h2>꼬부기 생활안전 구조대</h2>
             <p id="safetyReaction">꼬부기와 가장 안전한 행동을 찾아봐요.</p>
-            <div class="safety-shield" aria-label="안전 방패 진행도"><span>물방울 안전 방패</span><div><i id="safetyShieldBar"></i></div><b id="safetyShieldText">0 / 10</b></div>
+            <div class="safety-shield" aria-label="안전 방패 진행도"><span>물방울 안전 방패</span><div><i id="safetyShieldBar"></i></div><b id="safetyShieldText">0 / 10</b><div id="safetyProgress" class="safety-progress" aria-label="안전 문제 진행도"></div></div>
           </aside>
           <article class="safety-card"><span id="safetyCategory" class="knowledge-category"></span><h2 id="safetyQuestion"></h2><div id="safetyChoices" class="safety-choices"></div><p id="safetyExplanation" class="knowledge-explanation" aria-live="polite"></p></article>
         </div>
@@ -508,14 +508,15 @@
       <section id="screen-result" class="screen result-screen">
         <article class="result-card">
           <div id="resultMascot" class="result-mascot"></div>
-          <div>
+          <div class="result-content">
             <span id="resultStars" class="result-stars"></span>
             <h2 id="resultTitle"></h2>
             <p id="resultSpeech"></p>
             <div id="resultReward" class="result-reward hidden-panel" aria-live="polite"></div>
             <div id="resultStats" class="result-stats"></div>
+            <div id="knowledgeResultReview" class="knowledge-result-review hidden-panel"></div>
             <div class="result-actions">
-              <button class="primary-button" data-action="retry" type="button">다시 도전</button>
+              <button id="resultRetry" class="primary-button" data-action="retry" type="button">다시 도전</button>
               <button class="secondary-button" data-action="modes" type="button">다른 게임</button>
               <button class="ghost-button" data-action="grades" type="button">학년 선택</button>
             </div>
@@ -564,7 +565,7 @@
 
   <noscript>이 게임은 JavaScript를 켜야 실행할 수 있습니다.</noscript>
   <script src="./config/allowed-trainers.js"></script>
-  <script defer src="./dist/main.js?v=1.0.20260729.2"></script>
+  <script defer src="./dist/main.js?v=1.0.20260729.4"></script>
   <script>
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
       window.addEventListener("load", function () {
