@@ -11,7 +11,7 @@
   <link rel="shortcut icon" href="./assets/pokeball-favicon-32.png?v=1.0.20260726.6">
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/pokeball-apple-touch-icon.png?v=1.0.20260726.6">
   <link rel="manifest" href="./site.webmanifest?v=1.0.20260726.6">
-  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260729.19">
+  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260729.23">
   <script>document.documentElement.dataset.introScene = Math.random() < 0.5 ? "adventure" : "rocket";</script>
   <meta name="application-name" content="포켓몬 배움 탐험대">
   <meta name="app-version" content="1.0">
@@ -193,18 +193,22 @@
 
       <section id="screen-pokedex" class="screen">
         <div class="screen-heading">
-          <div><span class="eyebrow">POKÉDEX</span><h2>나의 포켓몬 도감</h2></div>
+          <div><span id="collectionEyebrow" class="eyebrow">POKÉDEX</span><h2 id="collectionTitle">나의 포켓몬 도감</h2></div>
           <span id="pokedexCount" class="today-grade"></span>
+        </div>
+        <div class="collection-tabs" role="tablist" aria-label="나의 도감 종류">
+          <button id="collectionPokemonTab" class="active" type="button" role="tab" aria-selected="true">포켓몬 도감</button>
+          <button id="collectionTrainerTab" type="button" role="tab" aria-selected="false">트레이너 앨범</button>
         </div>
         <div class="pokedex-tools" aria-label="도감 검색과 필터">
           <label class="pokedex-search" for="pokedexSearch">
-            <span>포켓몬 찾기</span>
+            <span id="collectionSearchLabel">포켓몬 찾기</span>
             <input id="pokedexSearch" type="search" placeholder="이름 또는 도감 번호" autocomplete="off">
           </label>
           <div class="pokedex-filters" role="group" aria-label="발견 상태 필터">
             <button class="active" data-pokedex-filter="all" type="button" aria-pressed="true">전체</button>
-            <button data-pokedex-filter="discovered" type="button" aria-pressed="false">발견</button>
-            <button data-pokedex-filter="locked" type="button" aria-pressed="false">미발견</button>
+            <button id="collectionOwnedFilter" data-pokedex-filter="discovered" type="button" aria-pressed="false">발견</button>
+            <button id="collectionLockedFilter" data-pokedex-filter="locked" type="button" aria-pressed="false">미발견</button>
           </div>
           <span id="pokedexVisibleCount" class="pokedex-visible-count" aria-live="polite"></span>
         </div>
@@ -582,7 +586,7 @@
 
   <noscript>이 게임은 JavaScript를 켜야 실행할 수 있습니다.</noscript>
   <script src="./config/allowed-trainers.js"></script>
-  <script defer src="./dist/main.js?v=1.0.20260729.18"></script>
+  <script defer src="./dist/main.js?v=1.0.20260729.22"></script>
   <script>
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
       window.addEventListener("load", function () {
