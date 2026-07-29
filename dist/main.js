@@ -4364,16 +4364,18 @@ function renderKnowledgeHud() {
     if (!knowledge)
         return;
     const seconds = Math.min(MAX_GAME_SECONDS, Math.floor((Date.now() - knowledge.started) / 1000));
+    const total = knowledge.questions.length;
+    const completed = Math.min(total, knowledge.index + (knowledge.locked ? 1 : 0));
     byId("knowledgeScore").textContent = String(knowledge.score);
     byId("knowledgeTime").textContent = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
-    byId("knowledgeCount").textContent = "탐험 " + Math.min(10, knowledge.index + 1) + "/10";
+    byId("knowledgeCount").textContent = "탐험 " + Math.min(total, knowledge.index + 1) + "/" + total;
     byId("knowledgeStreak").textContent = String(knowledge.streak);
     const progress = byId("knowledgeProgress");
     progress.replaceChildren();
-    for (let index = 0; index < 10; index += 1) {
+    for (let index = 0; index < total; index += 1) {
         const dot = document.createElement("span");
-        dot.className = index < knowledge.index ? "complete" : index === knowledge.index ? "current" : "";
-        dot.textContent = index < knowledge.index ? "✓" : String(index + 1);
+        dot.className = index < completed ? "complete" : !knowledge.locked && index === knowledge.index ? "current" : "";
+        dot.textContent = index < completed ? "✓" : String(index + 1);
         progress.append(dot);
     }
     renderKnowledgeBadge();
@@ -5546,4 +5548,83 @@ if (document.readyState === "loading") {
 }
 else {
     installCoordinateRuleDock();
+}
+/* codex:pikachu-quiz-polish */
+const installCodexPikachuQuizPolish = () => {
+    let scanQueued = false;
+    const queueScan = () => {
+        if (scanQueued)
+            return;
+        scanQueued = true;
+        requestAnimationFrame(() => {
+            scanQueued = false;
+            const marker = Array.from(document.querySelectorAll("body *")).find((element) => {
+                const text = (element.textContent || "").trim();
+                return element.children.length === 0 && /PIKACHU POWER TRAINING/i.test(text);
+            });
+            if (!marker)
+                return;
+            let root = marker.closest('[class*="pikachu"], [class*="mental"], [class*="quiz-game"], [class*="game-stage"], [class*="game-play"]');
+            if (!root) {
+                let candidate = marker.parentElement;
+                for (let depth = 0; candidate && depth < 7; depth += 1, candidate = candidate.parentElement) {
+                    if (candidate.querySelectorAll("button").length >= 4) {
+                        root = candidate;
+                        break;
+                    }
+                }
+            }
+            if (!root)
+                return;
+            root.dataset.pikachuPolished = "true";
+            Array.from(root.querySelectorAll("*")).forEach((element) => {
+                if (element.children.length > 0)
+                    return;
+                const text = (element.textContent || "").trim();
+                if (/^-?\d+\s*[+\-xX×÷]\s*-?\d+\s*=\s*\?$/.test(text)) {
+                    element.classList.add("codex-pika-equation");
+                }
+                if (/다시 생각|잠깐 생각|정답|충전|잘했|아쉬워/.test(text)) {
+                    element.classList.add("codex-pika-feedback");
+                }
+            });
+            root.querySelectorAll("button").forEach((button) => {
+                const label = (button.textContent || "").trim();
+                if (!/^-?\d+$/.test(label))
+                    return;
+                button.classList.add("codex-pika-choice");
+                if (button.dataset.pikachuGuard === "true")
+                    return;
+                button.dataset.pikachuGuard = "true";
+                button.addEventListener("click", (event) => {
+                    if (root?.dataset.pikachuInputLock === "true") {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        return;
+                    }
+                    if (!root)
+                        return;
+                    root.dataset.pikachuInputLock = "true";
+                    window.setTimeout(() => {
+                        if (root)
+                            delete root.dataset.pikachuInputLock;
+                    }, 380);
+                }, true);
+            });
+            const mascot = Array.from(root.querySelectorAll("img")).find((image) => {
+                const source = `${image.src} ${image.alt}`.toLowerCase();
+                return /pikachu|\/25(?:\D|$)|\/025(?:\D|$)/.test(source);
+            });
+            mascot?.classList.add("codex-pika-mascot");
+        });
+    };
+    const observer = new MutationObserver(queueScan);
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    queueScan();
+};
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", installCodexPikachuQuizPolish, { once: true });
+}
+else {
+    installCodexPikachuQuizPolish();
 }
