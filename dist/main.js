@@ -1321,7 +1321,7 @@ function choicesFor(answer) {
     }
     return shuffle(Array.from(values));
 }
-function startSelectedGame() {
+function startSelectedGame(reviewCurrentGame = false) {
     if (state.grade === null || state.mode === null) {
         openGrades();
         return;
@@ -1358,15 +1358,15 @@ function startSelectedGame() {
     if (state.mode === "mine")
         startMine();
     if (state.mode === "knowledge")
-        startKnowledge();
+        startKnowledge(reviewCurrentGame ? knowledgeReviewQuestions ?? undefined : undefined);
     if (state.mode === "symmetry")
         startSymmetry();
     if (state.mode === "coordinate")
         startCoordinate();
     if (state.mode === "history")
-        startHistory();
+        startHistory(reviewCurrentGame ? historyReviewEvents ?? undefined : undefined);
     if (state.mode === "safety")
-        startSafety();
+        startSafety(reviewCurrentGame ? safetyReviewQuestions ?? undefined : undefined);
     if (state.mode === "snack")
         startSnack();
 }
@@ -3931,15 +3931,18 @@ const HISTORY_EVENTS = [
     { year: 1945, label: "우리나라가 광복을 맞았어요", yearLabel: "1945년", minGrade: 0 }, { year: 1950, label: "6·25 전쟁이 일어났어요", yearLabel: "1950년", minGrade: 4 }
 ];
 let historyGame = null;
+let historyReviewEvents = null;
 function stopHistory() { if (historyGame)
     historyGame.running = false; }
-function startHistory() {
+function startHistory(reviewEvents) {
     if (state.grade === null)
         return;
     const grade = state.grade;
     const pool = HISTORY_EVENTS.filter((event) => event.minGrade <= grade);
-    const events = shuffle([...pool]).slice(0, Math.min(8, pool.length));
-    historyGame = { running: true, events, remaining: new Set(events.map((event) => event.year)), score: 0, mistakes: 0, streak: 0, bestStreak: 0, lastWrongYear: null, started: Date.now(), rewardMilestone: 0 };
+    const isReview = Boolean(reviewEvents?.length);
+    const events = isReview ? shuffle([...reviewEvents]) : shuffle([...pool]).slice(0, Math.min(8, pool.length));
+    historyReviewEvents = null;
+    historyGame = { running: true, events, remaining: new Set(events.map((event) => event.year)), answers: [], score: 0, mistakes: 0, streak: 0, bestStreak: 0, locked: false, started: Date.now(), rewardMilestone: 0, isReview };
     replaceWithPokemon(byId("historyMascot"), 60);
     showScreen("history");
     renderHistory();
@@ -3947,6 +3950,7 @@ function startHistory() {
 function renderHistory() {
     if (!historyGame)
         return;
+    historyGame.locked = false;
     const completed = historyGame.events.length - historyGame.remaining.size;
     const total = Math.max(1, historyGame.events.length);
     const energy = byId("historyEnergyBar").closest(".history-energy");
@@ -3979,63 +3983,95 @@ function renderHistory() {
     }
     const cards = byId("historyCards");
     cards.replaceChildren();
-    historyGame.events.filter((event) => historyGame?.remaining.has(event.year)).forEach((event, index) => { const button = document.createElement("button"); button.type = "button"; button.className = "history-card"; if (historyGame?.lastWrongYear === event.year)
-        button.classList.add("history-card-retry"); button.innerHTML = "<span>사건 " + String(index + 1).padStart(2, "0") + "</span><b>" + event.label + "</b>"; button.addEventListener("click", () => chooseHistoryEvent(event, button)); cards.append(button); });
+    historyGame.events.filter((event) => historyGame?.remaining.has(event.year)).forEach((event, index) => { const button = document.createElement("button"); button.type = "button"; button.className = "history-card"; button.innerHTML = "<span>사건 " + String(index + 1).padStart(2, "0") + "</span><b>" + event.label + "</b>"; button.addEventListener("click", () => chooseHistoryEvent(event, button)); cards.append(button); });
 }
 function chooseHistoryEvent(event, button) {
-    if (!historyGame?.running)
+    if (!historyGame?.running || historyGame.locked)
         return;
+    historyGame.locked = true;
     const earliest = Math.min(...Array.from(historyGame.remaining));
+    const expected = historyGame.events.find((item) => item.year === earliest);
+    const correct = event.year === earliest;
     const feedback = byId("historyFeedback");
-    if (event.year === earliest) {
-        const retried = choiceMistakeCount("historyCards") > 0;
-        resetChoicePenalty("historyCards");
-        historyGame.remaining.delete(event.year);
+    const buttons = Array.from(byId("historyCards").querySelectorAll(".history-card"));
+    historyGame.answers.push({ selected: event, expected, correct });
+    historyGame.remaining.delete(earliest);
+    buttons.forEach((choice) => {
+        choice.disabled = true;
+        if (choice.textContent?.includes(expected.label))
+            choice.classList.add("correct");
+    });
+    if (correct) {
         historyGame.streak += 1;
         historyGame.bestStreak = Math.max(historyGame.bestStreak, historyGame.streak);
-        historyGame.lastWrongYear = null;
-        const bonus = retried ? 0 : Math.min(100, (historyGame.streak - 1) * 20);
-        historyGame.score += retried ? 70 : 140 + bonus;
+        const bonus = Math.min(100, (historyGame.streak - 1) * 20);
+        historyGame.score += 140 + bonus;
         button.classList.add("correct");
+        feedback.dataset.status = "correct";
+        feedback.textContent = event.yearLabel + " · 시간 물결 연결!" + (bonus ? " 연속 보너스 +" + bonus : "");
         correctSound();
         pokemonSparkBurst(10);
-        feedback.dataset.status = "correct";
-        feedback.textContent = event.yearLabel + (retried ? " · 재도전으로 시간 물결 연결! +70" : " · 시간 물결 연결!" + (bonus ? " 연속 보너스 +" + bonus : ""));
-        if (!historyGame.remaining.size) {
-            window.setTimeout(finishHistory, 700);
-            return;
-        }
     }
     else {
         historyGame.mistakes += 1;
         historyGame.streak = 0;
-        historyGame.lastWrongYear = event.year;
+        button.classList.add("wrong");
         feedback.dataset.status = "wrong";
-        const earliestEvent = historyGame.events.find((item) => item.year === earliest);
-        const buttons = Array.from(byId("historyCards").querySelectorAll(".history-card"));
-        const answerButton = buttons.find((item) => item.textContent?.includes(earliestEvent?.label ?? "__none__"));
-        const retry = applyChoicePenalty("historyCards", ".history-card", button, answerButton, feedback, "고오스가 시간의 길을 가렸어요. 더 오래된 사건을 한 번 더 찾아봐요!", "두 번 틀렸어요. 가장 오래된 사건을 빛으로 표시했어요.");
-        byId("historyMistakes").textContent = String(historyGame.mistakes);
-        byId("historyStreak").textContent = "0";
-        if (retry)
+        feedback.textContent = "아쉬워요. 다음 사건은 ‘" + expected.yearLabel + " · " + expected.label + "’이에요.";
+        wrongSound();
+    }
+    byId("historyMistakes").textContent = String(historyGame.mistakes);
+    byId("historyStreak").textContent = String(historyGame.streak);
+    window.setTimeout(() => {
+        if (!historyGame?.running)
             return;
-        window.setTimeout(() => { if (!historyGame?.running)
-            return; historyGame.remaining.delete(earliest); historyGame.lastWrongYear = null; resetChoicePenalty("historyCards"); if (!historyGame.remaining.size)
+        if (!historyGame.remaining.size)
             finishHistory();
         else
-            renderHistory(); }, 1700);
-        return;
-    }
-    renderHistory();
+            renderHistory();
+    }, correct ? 1250 : 1850);
 }
 function finishHistory() {
     if (!historyGame?.running || state.grade === null)
         return;
     const game = historyGame;
     stopHistory();
-    const stars = game.mistakes <= 1 ? 3 : game.mistakes <= 4 ? 2 : game.mistakes <= 7 ? 1 : 0;
+    const correct = game.answers.filter((answer) => answer.correct).length;
+    const accuracy = Math.round(correct / game.events.length * 100);
+    const stars = accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : accuracy >= 40 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "history", grade: state.grade, diff: "easy", score: game.score, stars, detail: game.events.length + "사건 · 실수 " + game.mistakes, timestamp: Date.now() });
-    showResult(stars, "발챙이 시간 물결 복원!", "발챙이와 과거에서 현재까지 역사의 흐름을 연결했어요.", [[String(game.score), "점수"], [String(game.events.length), "복원 사건"], [String(game.bestStreak), "최고 연속"], [String(game.mistakes), "실수"]]);
+    showResult(stars, game.isReview ? "시간 구간 복습 완료!" : "발챙이 시간 물결 복원!", "발챙이와 과거에서 현재까지 역사의 흐름을 연결했어요.", [[String(game.score), "점수"], [accuracy + "%", "정확도"], [correct + "/" + game.events.length, "정확히 연결"], [String(game.mistakes), "틀린 구간"]]);
+    renderHistoryResultReview(game);
+}
+function renderHistoryResultReview(game) {
+    const panel = byId("knowledgeResultReview");
+    const wrongAnswers = game.answers.filter((answer) => !answer.correct);
+    const reviewYears = new Set();
+    wrongAnswers.forEach((answer) => { reviewYears.add(answer.selected.year); reviewYears.add(answer.expected.year); });
+    historyReviewEvents = reviewYears.size ? game.events.filter((event) => reviewYears.has(event.year)) : null;
+    panel.replaceChildren();
+    panel.classList.remove("hidden-panel");
+    appendResultReviewHeading(panel, "시간선 결과표", wrongAnswers.length ? "틀린 구간과 올바른 시간 순서를 확인해요." : "모든 역사 사건을 정확한 순서로 연결했어요!");
+    appendResultMetricGrid(panel, [[String(game.answers.length - wrongAnswers.length) + " / " + game.events.length, "정확히 연결"], [String(wrongAnswers.length), "틀린 구간"], [String(game.bestStreak), "최고 연속"]]);
+    if (wrongAnswers.length) {
+        const details = createResultReviewDetails("틀린 시간 구간 " + wrongAnswers.length + "개");
+        const list = details.querySelector("ol");
+        wrongAnswers.forEach((answer) => {
+            const item = document.createElement("li");
+            const expected = document.createElement("strong");
+            expected.textContent = answer.expected.yearLabel + " · " + answer.expected.label;
+            const selected = document.createElement("p");
+            selected.className = "knowledge-review-selected";
+            selected.textContent = "내가 먼저 고른 사건: " + answer.selected.yearLabel + " · " + answer.selected.label;
+            const guide = document.createElement("p");
+            guide.className = "knowledge-review-correct";
+            guide.textContent = "이 단계의 올바른 사건";
+            item.append(guide, expected, selected);
+            list.append(item);
+        });
+        panel.append(details);
+    }
+    byId("resultRetry").textContent = wrongAnswers.length ? "틀린 시간 구간 다시 연결하기" : "새로운 시간여행";
 }
 const SAFETY_QUESTIONS = [
     { category: "교통안전", prompt: "횡단보도 신호가 초록불로 바뀌었어요. 가장 먼저 할 일은?", choices: ["좌우를 살피고 차가 멈췄는지 확인하기", "바로 뛰어가기", "휴대전화를 보며 걷기"], answer: 0, explanation: "초록불이어도 좌우를 보고 차량이 완전히 멈췄는지 확인해요.", minGrade: 0 },
@@ -4056,14 +4092,17 @@ const SAFETY_QUESTIONS = [
     { category: "개인정보", prompt: "친구가 보낸 것처럼 보이는 링크에서 비밀번호를 입력하래요.", choices: ["누르지 않고 보호자에게 확인하기", "바로 비밀번호 입력하기", "친구들에게 다시 보내기"], answer: 0, explanation: "의심스러운 링크는 열지 말고 보낸 사람이나 보호자에게 먼저 확인해요.", minGrade: 2 }
 ];
 let safety = null;
+let safetyReviewQuestions = null;
 function stopSafety() { if (safety)
     safety.running = false; }
-function startSafety() {
+function startSafety(reviewQuestions) {
     if (state.grade === null)
         return;
     const grade = state.grade;
-    const questions = shuffle(SAFETY_QUESTIONS.filter((question) => question.minGrade <= grade)).slice(0, 10);
-    safety = { running: true, questions, index: 0, score: 0, correct: 0, streak: 0, locked: false, started: Date.now(), rewardMilestone: 0 };
+    const isReview = Boolean(reviewQuestions?.length);
+    const questions = isReview ? shuffle([...reviewQuestions]) : shuffle(SAFETY_QUESTIONS.filter((question) => question.minGrade <= grade)).slice(0, 10);
+    safetyReviewQuestions = null;
+    safety = { running: true, questions, answers: [], index: 0, score: 0, correct: 0, streak: 0, locked: false, started: Date.now(), rewardMilestone: 0, isReview };
     replaceWithPokemon(byId("safetyMascot"), 7);
     showScreen("safety");
     nextSafety();
@@ -4090,7 +4129,6 @@ function nextSafety() {
     renderSafetyShield();
     const indexed = shuffle(question.choices.map((label, index) => ({ label, correct: index === question.answer })));
     const choices = byId("safetyChoices");
-    resetChoicePenalty("safetyChoices");
     choices.replaceChildren();
     indexed.forEach((item, index) => { const button = document.createElement("button"); button.type = "button"; button.className = "safety-choice"; button.textContent = item.label; button.addEventListener("click", () => answerSafety(item.correct, button, indexed)); choices.append(button); });
 }
@@ -4117,6 +4155,16 @@ function renderSafetyShield() {
     const total = Math.max(1, safety.questions.length);
     byId("safetyShieldBar").style.width = `${safety.correct / total * 100}%`;
     byId("safetyShieldText").textContent = `${safety.correct} / ${total}`;
+    const progress = byId("safetyProgress");
+    progress.replaceChildren();
+    progress.style.gridTemplateColumns = `repeat(${total},minmax(0,1fr))`;
+    for (let index = 0; index < total; index += 1) {
+        const dot = document.createElement("span");
+        const answer = safety.answers[index];
+        dot.className = answer ? answer.correct ? "complete" : "incorrect" : index === safety.index && !safety.locked ? "current" : "";
+        dot.textContent = answer ? answer.correct ? "✓" : "×" : String(index + 1);
+        progress.append(dot);
+    }
     document.querySelector("#screen-safety .safety-shield")?.classList.toggle("charged", safety.correct === total);
     if (safety.correct > 0 && safety.correct % 3 === 0 && safety.correct > safety.rewardMilestone) {
         safety.rewardMilestone = safety.correct;
@@ -4127,32 +4175,21 @@ function answerSafety(correct, selected, indexed) {
     if (!safety?.running || safety.locked)
         return;
     const question = safety.questions[safety.index];
-    const mistakes = choiceMistakeCount("safetyChoices");
     const buttons = Array.from(byId("safetyChoices").querySelectorAll("button"));
-    if (!correct) {
-        safety.streak = 0;
-        byId("screen-safety").classList.add("rescue-alert");
-        const answerIndex = indexed.findIndex((item) => item.correct);
-        const retry = applyChoicePenalty("safetyChoices", ".safety-choice", selected, buttons[answerIndex], byId("safetyReaction"), "고오스가 위험 표지판을 가렸어요. 안전 원칙을 떠올리고 다시 골라요!", "두 번 틀렸어요. 빛나는 안전 행동과 설명을 확인해요.");
-        byId("safetyStreak").textContent = "0";
-        if (retry) {
-            safety.locked = true;
-            window.setTimeout(() => { if (safety?.running)
-                safety.locked = false; }, 1100);
-            return;
-        }
-    }
+    const answerIndex = indexed.findIndex((item) => item.correct);
+    const correctLabel = indexed[answerIndex]?.label ?? question.choices[question.answer];
     safety.locked = true;
     buttons.forEach((button, index) => { button.disabled = true; if (indexed[index]?.correct)
         button.classList.add("correct"); });
+    safety.answers.push({ question, selectedLabel: selected.textContent ?? "", correctLabel, correct });
     if (correct) {
         safety.correct += 1;
         safety.streak += 1;
-        const patrolBonus = !mistakes && safety.streak % 3 === 0;
-        const gained = mistakes ? 65 : 120 + safety.streak * 10 + (patrolBonus ? 100 : 0);
+        const patrolBonus = safety.streak % 3 === 0;
+        const gained = 120 + safety.streak * 10 + (patrolBonus ? 100 : 0);
         safety.score += gained;
         selected.classList.add("correct");
-        byId("safetyReaction").textContent = mistakes ? "재도전 성공! 안전 점수 +65" : patrolBonus ? "꼬부기 구조 보너스! 3연속 안전 선택 +100" : "안전 선택 성공! 꼬부기가 힘차게 물방울 방패를 채웠어요.";
+        byId("safetyReaction").textContent = patrolBonus ? "꼬부기 구조 보너스! 3연속 안전 선택 +100" : "안전 선택 성공! 꼬부기가 힘차게 물방울 방패를 채웠어요.";
         byId("screen-safety").classList.add("rescue-success");
         if (patrolBonus) {
             pokemonSparkBurst(7);
@@ -4161,14 +4198,18 @@ function answerSafety(correct, selected, indexed) {
         correctSound();
     }
     else {
+        safety.streak = 0;
         selected.classList.add("wrong");
+        byId("screen-safety").classList.add("rescue-alert");
+        byId("safetyReaction").textContent = "아쉬워요. 가장 안전한 행동은 ‘" + correctLabel + "’이에요.";
+        wrongSound();
     }
     byId("safetyExplanation").textContent = question.explanation;
     byId("safetyScore").textContent = String(safety.score);
     byId("safetyStreak").textContent = String(safety.streak);
     renderSafetyShield();
     window.setTimeout(() => { if (!safety?.running)
-        return; safety.index += 1; nextSafety(); }, correct ? 1400 : 2300);
+        return; safety.index += 1; nextSafety(); }, correct ? 1400 : 2000);
 }
 function finishSafety() {
     if (!safety?.running || state.grade === null)
@@ -4178,7 +4219,54 @@ function finishSafety() {
     const accuracy = Math.round(game.correct / game.questions.length * 100);
     const stars = accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : accuracy >= 40 ? 1 : 0;
     saveRecord({ name: getName() || "친구", mode: "safety", grade: state.grade, diff: "easy", score: game.score, stars, detail: game.correct + "/" + game.questions.length + " · 안전", timestamp: Date.now() });
-    showResult(stars, "꼬부기 안전 순찰 완료!", "꼬부기와 " + game.correct + "개의 안전한 행동을 찾아 물방울 방패를 완성했어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/" + game.questions.length, "구조 성공"], [String(game.streak), "마지막 연속"]]);
+    showResult(stars, game.isReview ? "안전 문제 복습 완료!" : "꼬부기 안전 순찰 완료!", "꼬부기와 " + game.correct + "개의 안전한 행동을 찾아 물방울 방패를 완성했어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/" + game.questions.length, "구조 성공"], [String(game.questions.length - game.correct), "다시 볼 상황"]]);
+    renderSafetyResultReview(game);
+}
+function safetyResultArea(category) {
+    if (/교통|자전거|승강기/.test(category))
+        return "이동 안전";
+    if (/화재|지진|재난|폭염/.test(category))
+        return "재난 대응";
+    if (/인터넷|개인정보/.test(category))
+        return "온라인 안전";
+    if (/응급/.test(category))
+        return "응급 도움";
+    return "생활 건강";
+}
+function renderSafetyResultReview(game) {
+    const panel = byId("knowledgeResultReview");
+    const wrongAnswers = game.answers.filter((answer) => !answer.correct);
+    safetyReviewQuestions = wrongAnswers.length ? wrongAnswers.map((answer) => answer.question) : null;
+    panel.replaceChildren();
+    panel.classList.remove("hidden-panel");
+    appendResultReviewHeading(panel, "안전 순찰 결과표", wrongAnswers.length ? "잘 알고 있는 안전 분야와 다시 볼 상황을 확인해요." : "모든 상황에서 가장 안전한 행동을 선택했어요!");
+    const areas = Array.from(new Set(game.questions.map((question) => safetyResultArea(question.category))));
+    const areaStats = areas.map((area) => {
+        const answers = game.answers.filter((answer) => safetyResultArea(answer.question.category) === area);
+        return [answers.filter((answer) => answer.correct).length + " / " + answers.length, area];
+    });
+    appendResultMetricGrid(panel, areaStats);
+    if (wrongAnswers.length) {
+        const details = createResultReviewDetails("다시 볼 안전 상황 " + wrongAnswers.length + "개");
+        const list = details.querySelector("ol");
+        wrongAnswers.forEach((answer) => {
+            const item = document.createElement("li");
+            const prompt = document.createElement("strong");
+            prompt.textContent = answer.question.prompt;
+            const selected = document.createElement("p");
+            selected.className = "knowledge-review-selected";
+            selected.textContent = "내가 고른 행동: " + answer.selectedLabel;
+            const correctAnswer = document.createElement("p");
+            correctAnswer.className = "knowledge-review-correct";
+            correctAnswer.textContent = "안전한 행동: " + answer.correctLabel;
+            const explanation = document.createElement("p");
+            explanation.textContent = answer.question.explanation;
+            item.append(prompt, selected, correctAnswer, explanation);
+            list.append(item);
+        });
+        panel.append(details);
+    }
+    byId("resultRetry").textContent = wrongAnswers.length ? "틀린 안전 문제 다시 풀기" : "새로운 안전 순찰";
 }
 const KNOWLEDGE_QUESTIONS = [
     { category: "과학", prompt: "식물이 건강하게 자라는 데 가장 필요한 것은 무엇일까요?", choices: ["햇빛과 물", "장난감", "연필", "모래시계"], answer: 0, explanation: "식물은 햇빛을 받아 양분을 만들고 뿌리로 물을 흡수해요.", minGrade: 0, maxGrade: 2, tier: 1 },
@@ -4220,6 +4308,7 @@ const KNOWLEDGE_QUESTIONS = [
 ];
 let knowledge = null;
 let knowledgeDiscoveries = new Set();
+let knowledgeReviewQuestions = null;
 function showKnowledgeReward(screenId, kind, title, detail, pokemonId) {
     const screen = byId(screenId);
     screen.querySelector(".knowledge-reward-burst")?.remove();
@@ -4255,19 +4344,25 @@ function knowledgeQuestionsForGrade(grade) {
         const count = tier === 1 ? 4 : 3;
         selected.push(...shuffle(available.filter((question) => question.tier === tier)).slice(0, count));
     });
-    return selected.map((question) => {
-        const indexed = question.choices.map((label, index) => ({ label, correct: index === question.answer }));
-        const mixed = shuffle(indexed);
-        return { ...question, choices: mixed.map((item) => item.label), answer: mixed.findIndex((item) => item.correct) };
-    });
+    return selected.map(shuffleKnowledgeChoices);
 }
-function startKnowledge() {
+function shuffleKnowledgeChoices(question) {
+    const indexed = question.choices.map((label, index) => ({ label, correct: index === question.answer }));
+    const mixed = shuffle(indexed);
+    return { ...question, choices: mixed.map((item) => item.label), answer: mixed.findIndex((item) => item.correct) };
+}
+function startKnowledge(reviewQuestions) {
     if (state.grade === null)
         return;
+    const isReview = Boolean(reviewQuestions?.length);
+    const questions = isReview
+        ? reviewQuestions.map(shuffleKnowledgeChoices)
+        : knowledgeQuestionsForGrade(state.grade);
+    knowledgeReviewQuestions = null;
     knowledgeDiscoveries = new Set();
     knowledge = {
-        questions: knowledgeQuestionsForGrade(state.grade), index: 0, score: 0, correct: 0, streak: 0, best: 0,
-        locked: false, started: Date.now(), running: true, timer: null
+        questions, answers: [], index: 0, score: 0, correct: 0, streak: 0, best: 0,
+        locked: false, started: Date.now(), running: true, timer: null, isReview
     };
     replaceWithPokemon(byId("knowledgePartner"), 151);
     showScreen("knowledge");
@@ -4275,10 +4370,7 @@ function startKnowledge() {
     knowledge.timer = window.setInterval(() => {
         if (!knowledge?.running)
             return;
-        if (Date.now() - knowledge.started >= MAX_GAME_SECONDS * 1000)
-            finishKnowledge();
-        else
-            renderKnowledgeHud();
+        renderKnowledgeHud();
     }, 1000);
 }
 function nextKnowledgeQuestion() {
@@ -4296,7 +4388,6 @@ function nextKnowledgeQuestion() {
     byId("knowledgeQuestion").textContent = question.prompt;
     byId("knowledgeExplanation").replaceChildren();
     const choices = byId("knowledgeChoices");
-    resetChoicePenalty("knowledgeChoices");
     choices.replaceChildren();
     question.choices.forEach((label, index) => {
         const button = document.createElement("button");
@@ -4322,16 +4413,8 @@ function answerKnowledge(index, selected) {
     const question = knowledge.questions[knowledge.index];
     const correct = index === question.answer;
     const buttons = Array.from(byId("knowledgeChoices").querySelectorAll(".knowledge-choice"));
-    const mistakes = choiceMistakeCount("knowledgeChoices");
-    if (!correct) {
-        knowledge.streak = 0;
-        byId("knowledgeExplanation").className = "knowledge-explanation wrong";
-        const retry = applyChoicePenalty("knowledgeChoices", ".knowledge-choice", selected, buttons[question.answer], byId("knowledgeExplanation"), "고오스가 탐험 지도를 흐렸어요. 문제를 다시 읽고 한 번 더 골라요!", "두 번 틀렸어요. 정답과 해설을 확인하고 다음 탐험으로 이동해요.");
-        renderKnowledgeHud();
-        if (retry)
-            return;
-    }
     knowledge.locked = true;
+    knowledge.answers.push({ question, selected: index, correct });
     buttons.forEach((button, buttonIndex) => {
         button.disabled = true;
         if (buttonIndex === question.answer)
@@ -4344,10 +4427,10 @@ function answerKnowledge(index, selected) {
         knowledge.streak += 1;
         knowledge.best = Math.max(knowledge.best, knowledge.streak);
         const baseScore = 100 + knowledge.streak * 15 + question.tier * 20;
-        knowledge.score += mistakes ? Math.round(baseScore * .5) : baseScore;
+        knowledge.score += baseScore;
         selected.classList.add("correct");
         byId("knowledgeExplanation").className = "knowledge-explanation correct";
-        byId("knowledgeExplanation").textContent = (mistakes ? "재도전 성공! " : "정답! ") + question.explanation;
+        byId("knowledgeExplanation").textContent = "정답! " + question.explanation;
         correctSound();
         pokemonSparkBurst(151);
         renderKnowledgeBadge();
@@ -4358,8 +4441,10 @@ function answerKnowledge(index, selected) {
     }
     else {
         knowledge.streak = 0;
+        selected.classList.add("wrong");
         byId("knowledgeExplanation").className = "knowledge-explanation wrong";
-        byId("knowledgeExplanation").textContent = "배움 획득! " + question.explanation;
+        byId("knowledgeExplanation").textContent = "아쉬워요. 정답은 ‘" + question.choices[question.answer] + "’예요. " + question.explanation;
+        wrongSound();
     }
     renderKnowledgeHud();
     window.setTimeout(() => {
@@ -4367,14 +4452,13 @@ function answerKnowledge(index, selected) {
             return;
         knowledge.index += 1;
         nextKnowledgeQuestion();
-    }, correct ? 1300 : 2200);
+    }, correct ? 1350 : 1850);
 }
 function renderKnowledgeHud() {
     if (!knowledge)
         return;
-    const seconds = Math.min(MAX_GAME_SECONDS, Math.floor((Date.now() - knowledge.started) / 1000));
+    const seconds = Math.floor((Date.now() - knowledge.started) / 1000);
     const total = knowledge.questions.length;
-    const completed = Math.min(total, knowledge.index + (knowledge.locked ? 1 : 0));
     byId("knowledgeScore").textContent = String(knowledge.score);
     byId("knowledgeTime").textContent = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
     byId("knowledgeCount").textContent = "탐험 " + Math.min(total, knowledge.index + 1) + "/" + total;
@@ -4383,8 +4467,9 @@ function renderKnowledgeHud() {
     progress.replaceChildren();
     for (let index = 0; index < total; index += 1) {
         const dot = document.createElement("span");
-        dot.className = index < completed ? "complete" : !knowledge.locked && index === knowledge.index ? "current" : "";
-        dot.textContent = index < completed ? "✓" : String(index + 1);
+        const answer = knowledge.answers[index];
+        dot.className = answer ? answer.correct ? "complete" : "incorrect" : !knowledge.locked && index === knowledge.index ? "current" : "";
+        dot.textContent = answer ? answer.correct ? "✓" : "×" : String(index + 1);
         progress.append(dot);
     }
     renderKnowledgeBadge();
@@ -4401,11 +4486,105 @@ function finishKnowledge() {
         return;
     const game = knowledge;
     const seconds = Math.floor((Date.now() - game.started) / 1000);
-    const accuracy = Math.round(game.correct / 10 * 100);
+    const total = game.questions.length;
+    const accuracy = Math.round(game.correct / total * 100);
     const stars = accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : accuracy >= 40 ? 1 : 0;
     stopKnowledge();
-    saveRecord({ name: getName() || "친구", mode: "knowledge", grade: state.grade, diff: "easy", score: game.score, stars, detail: game.correct + "/10 · 지식", timestamp: Date.now() });
-    showResult(stars, "지식탐험 완료!", game.correct + "개의 지식 보물을 찾았어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/10", "정답"], [String(game.best), "최고 연속"]]);
+    saveRecord({ name: getName() || "친구", mode: "knowledge", grade: state.grade, diff: "easy", score: game.score, stars, detail: game.correct + "/" + total + " · 지식", timestamp: Date.now() });
+    showResult(stars, game.isReview ? "오답 복습 완료!" : "지식탐험 완료!", game.correct + "개의 지식 보물을 찾았어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/" + total, "정답"], [Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0"), "시간"]]);
+    renderKnowledgeResultReview(game);
+}
+function renderKnowledgeResultReview(game) {
+    const panel = byId("knowledgeResultReview");
+    const categories = ["과학", "사회", "역사", "생활"];
+    const missedQuestions = game.questions.filter((_, index) => !game.answers[index]?.correct);
+    knowledgeReviewQuestions = missedQuestions.length ? missedQuestions : null;
+    panel.replaceChildren();
+    panel.classList.remove("hidden-panel");
+    const heading = document.createElement("h3");
+    heading.textContent = "탐험 결과표";
+    const summary = document.createElement("p");
+    summary.className = "knowledge-result-summary";
+    summary.textContent = missedQuestions.length
+        ? "맞힌 문제와 다시 볼 문제를 한눈에 확인해요."
+        : "모든 문제를 정확히 맞혔어요! 새로운 탐험에도 도전해 보세요.";
+    panel.append(heading, summary);
+    const categoryGrid = document.createElement("div");
+    categoryGrid.className = "knowledge-category-results";
+    categories.forEach((category) => {
+        const indexes = game.questions.map((question, index) => question.category === category ? index : -1).filter((index) => index >= 0);
+        if (!indexes.length)
+            return;
+        const correct = indexes.filter((index) => game.answers[index]?.correct).length;
+        const item = document.createElement("div");
+        item.dataset.category = category;
+        const label = document.createElement("span");
+        label.textContent = category;
+        const value = document.createElement("b");
+        value.textContent = correct + " / " + indexes.length;
+        item.append(label, value);
+        categoryGrid.append(item);
+    });
+    panel.append(categoryGrid);
+    if (missedQuestions.length) {
+        const details = document.createElement("details");
+        details.className = "knowledge-missed-review";
+        const detailsSummary = document.createElement("summary");
+        detailsSummary.textContent = "다시 볼 문제 " + missedQuestions.length + "개";
+        const list = document.createElement("ol");
+        game.questions.forEach((question, index) => {
+            const answer = game.answers[index];
+            if (answer?.correct)
+                return;
+            const item = document.createElement("li");
+            const prompt = document.createElement("strong");
+            prompt.textContent = question.prompt;
+            const selected = document.createElement("p");
+            selected.className = "knowledge-review-selected";
+            selected.textContent = answer ? "내가 고른 답: " + question.choices[answer.selected] : "시간 안에 풀지 못한 문제예요.";
+            const correctAnswer = document.createElement("p");
+            correctAnswer.className = "knowledge-review-correct";
+            correctAnswer.textContent = "정답: " + question.choices[question.answer];
+            const explanation = document.createElement("p");
+            explanation.textContent = question.explanation;
+            item.append(prompt, selected, correctAnswer, explanation);
+            list.append(item);
+        });
+        details.append(detailsSummary, list);
+        panel.append(details);
+    }
+    byId("resultRetry").textContent = missedQuestions.length ? "틀린 문제 다시 풀기" : "새로운 10문제";
+}
+function appendResultReviewHeading(panel, title, description) {
+    const heading = document.createElement("h3");
+    heading.textContent = title;
+    const summary = document.createElement("p");
+    summary.className = "knowledge-result-summary";
+    summary.textContent = description;
+    panel.append(heading, summary);
+}
+function appendResultMetricGrid(panel, metrics) {
+    const grid = document.createElement("div");
+    grid.className = "knowledge-category-results result-review-metrics";
+    metrics.forEach(([value, label]) => {
+        const item = document.createElement("div");
+        const labelElement = document.createElement("span");
+        labelElement.textContent = label;
+        const valueElement = document.createElement("b");
+        valueElement.textContent = value;
+        item.append(labelElement, valueElement);
+        grid.append(item);
+    });
+    panel.append(grid);
+}
+function createResultReviewDetails(summaryText) {
+    const details = document.createElement("details");
+    details.className = "knowledge-missed-review";
+    const summary = document.createElement("summary");
+    summary.textContent = summaryText;
+    const list = document.createElement("ol");
+    details.append(summary, list);
+    return details;
 }
 const MINE_STAGES = [
     { rows: 8, columns: 8, mines: 8 },
@@ -4820,6 +4999,10 @@ function showResult(stars, title, speech, stats) {
     const container = byId("resultStats");
     container.replaceChildren();
     stats.forEach(([value, label]) => container.append(heroStat(value, label)));
+    const knowledgeReview = byId("knowledgeResultReview");
+    knowledgeReview.replaceChildren();
+    knowledgeReview.classList.add("hidden-panel");
+    byId("resultRetry").textContent = "다시 도전";
     showScreen("result");
     window.setTimeout(() => playPokemonCry(getAvatarId(), .18), 220);
     pokemonSparkBurst(leveledUp ? 48 : stars >= 2 ? 30 : 14);
@@ -5392,8 +5575,13 @@ function bindEvents() {
                 cleanupGame();
                 buildModes();
             }
-            if (action === "retry")
-                startSelectedGame();
+            if (action === "retry") {
+                const reviewAvailable = state.mode === "knowledge" ? Boolean(knowledgeReviewQuestions?.length)
+                    : state.mode === "history" ? Boolean(historyReviewEvents?.length)
+                        : state.mode === "safety" ? Boolean(safetyReviewQuestions?.length)
+                            : false;
+                startSelectedGame(reviewAvailable);
+            }
         });
     });
     document.querySelectorAll("[data-quit]").forEach((button) => {
