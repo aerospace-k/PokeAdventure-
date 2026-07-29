@@ -3948,12 +3948,21 @@ function renderHistory() {
     if (!historyGame)
         return;
     const completed = historyGame.events.length - historyGame.remaining.size;
+    const total = Math.max(1, historyGame.events.length);
+    const energy = byId("historyEnergyBar").closest(".history-energy");
     byId("historyScore").textContent = String(historyGame.score);
     byId("historyCount").textContent = completed + "/" + historyGame.events.length;
     byId("historyStreak").textContent = String(historyGame.streak);
     byId("historyMistakes").textContent = String(historyGame.mistakes);
-    byId("historyEnergyBar").style.width = String(completed / Math.max(1, historyGame.events.length) * 100) + "%";
+    byId("historyEnergyBar").style.width = String(completed / total * 100) + "%";
     byId("historyEnergyText").textContent = completed + " / " + historyGame.events.length;
+    byId("historyEnergyHint").textContent = completed === 0
+        ? "사건을 순서대로 연결해 시간 물결을 채워요."
+        : completed === historyGame.events.length
+            ? "시간 물결 복원 완료! 과거와 현재가 다시 이어졌어요."
+            : "앞으로 " + (historyGame.events.length - completed) + "개의 사건을 더 연결하면 복원이 완료돼요.";
+    energy?.classList.toggle("is-charged", completed > 0);
+    energy?.classList.toggle("is-complete", completed === historyGame.events.length);
     if (completed > 0 && completed % 2 === 0 && completed > historyGame.rewardMilestone) {
         historyGame.rewardMilestone = completed;
         showKnowledgeReward("screen-history", "timeline", "시간 물결 복원!", completed + "개의 역사 사건을 연결했어요.", 60);
