@@ -11,7 +11,7 @@
   <link rel="shortcut icon" href="./assets/pokeball-favicon-32.png?v=1.0.20260726.6">
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/pokeball-apple-touch-icon.png?v=1.0.20260726.6">
   <link rel="manifest" href="./site.webmanifest?v=1.0.20260726.6">
-  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260730.07">
+  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260730.10">
   <script>document.documentElement.dataset.introScene = Math.random() < 0.5 ? "adventure" : "rocket";</script>
   <meta name="application-name" content="포켓몬 배움 탐험대">
   <meta name="app-version" content="1.0">
@@ -93,7 +93,7 @@
         <button id="pokemonPickerTab" class="active" type="button" role="tab" aria-selected="true" aria-controls="avatarGrid">1. 파트너 포켓몬</button>
         <button id="trainerPickerTab" type="button" role="tab" aria-selected="false" aria-controls="avatarGrid">2. 나의 트레이너</button>
       </div>
-      <p id="identityPickerHint" class="identity-picker-hint">포켓몬을 선택하면 트레이너 선택으로 이어져요.</p>
+      <p id="identityPickerHint" class="identity-picker-hint">보유한 포켓몬 중에서 선택해 주세요.</p>
       <div id="avatarGrid" class="avatar-grid" role="list" aria-labelledby="avatarPickerTitle"></div>
     </div>
   </section>
@@ -265,18 +265,16 @@
 
       <section id="screen-rain" class="screen game-screen">
         <div class="hud">
-          <span id="rainHp">❤️❤️❤️❤️❤️</span>
           <span>점수 <b id="rainScore">0</b></span>
           <span>단계 <b id="rainWave">1</b></span>
-          <span>속도 <b id="rainSpeed">1.0</b>x</span>
           <button class="quit-button" data-quit="rain" type="button">그만하기</button>
         </div>
         <div class="rain-layout">
-          <div id="rainField" class="playfield"><div id="rainSceneIntro" class="rain-scene-intro" aria-hidden="true"><div class="rain-scene-copy"><span>MAGIKARP RAIN RESCUE</span><strong>잉어킹 산성비 챌린지</strong><small>비 내리는 도시를 수식으로 지켜 주세요!</small></div></div><div class="ground"></div></div>
+          <div id="rainField" class="playfield" aria-label="잉어킹 산성비 문제 게임 영역"><span class="rain-field-lives" role="status" aria-live="polite">잔여 생명 <b id="rainHp">❤️❤️❤️</b></span><div id="rainSceneIntro" class="rain-scene-intro" aria-hidden="true"><div class="rain-scene-copy"><span>MAGIKARP RAIN RESCUE</span><strong>잉어킹 산성비 챌린지</strong><small>비 내리는 도시를 수식으로 지켜 주세요!</small></div></div><div class="ground"></div></div>
           <aside class="rain-controls">
             <div id="rainTrainer" class="trainer-cameo"></div>
-            <p>일반 문제만 풀고, 보라색 로켓단 함정은 건드리지 마세요.</p>
-            <div id="rainInput" class="answer-display">?</div>
+            <p>노란색 문제만 풀고, 보라색 함정은 지나가게 하세요. 초록색은 생명을 회복해요.</p>
+            <div id="rainInput" class="answer-display" role="status" aria-live="polite" aria-label="입력한 답">?</div>
             <div id="rainKeypad" class="keypad"></div>
           </aside>
         </div>
@@ -461,11 +459,11 @@
       <section id="screen-snack" class="screen game-screen">
         <div class="hud">
           <span>점수 <b id="snackScore">0</b></span><span>시간 <b id="snackTime">60</b>초</span>
-          <span>연속 <b id="snackCombo">0</b></span><span>체력 <b id="snackLives">♥♥♥</b></span><span>속도 <b id="snackSpeed">1.0</b>x</span>
+          <span>연속 <b id="snackCombo">0</b></span><span>속도 <b id="snackSpeed">1.0</b>x</span>
           <button class="quit-button" data-quit="snack" type="button">그만하기</button>
         </div>
         <div class="snack-layout">
-          <div id="snackField" class="snack-field" aria-label="잠만보 열매 캐치 게임"><div id="snackSceneIntro" class="snack-scene-intro" aria-hidden="true"><div class="snack-scene-copy"><span>BERRY HILL ADVENTURE</span><strong>잠만보 베리 대모험</strong><small>마을 언덕에서 맛있는 열매를 받아요!</small></div></div><div class="snack-clouds" aria-hidden="true"></div><div id="snackPlayer" class="snack-player"></div></div>
+          <div id="snackField" class="snack-field" aria-label="잠만보 열매 캐치 게임"><span class="snack-field-lives">잔여 생명 <b id="snackLives">♥♥♥</b></span><div id="snackSceneIntro" class="snack-scene-intro" aria-hidden="true"><div class="snack-scene-copy"><span>BERRY HILL ADVENTURE</span><strong>잠만보 베리 대모험</strong><small>마을 언덕에서 맛있는 열매를 받아요!</small></div></div><div class="snack-clouds" aria-hidden="true"></div><div id="snackPlayer" class="snack-player"></div></div>
           <aside class="snack-controls"><span class="snack-route">BERRY FOREST</span><h2>잠만보 베리 대모험</h2><p>다양한 열매를 모아 10콤보 피버를 만들고, 바위는 피해요!</p><div class="snack-fever"><span>피버 게이지</span><div><i id="snackFeverBar"></i></div><b id="snackFeverText">0/10</b></div><div class="snack-move-buttons"><button data-snack-move="left" type="button">◀ 왼쪽</button><button data-snack-move="right" type="button">오른쪽 ▶</button></div><div class="snack-legend"><span>열매별 +80~300</span><span>이상한사탕 +400</span><span>회복약 체력 +1</span><span>딱딱한돌 조심!</span></div></aside>
         </div>
       </section>
@@ -587,7 +585,7 @@
 
   <noscript>이 게임은 JavaScript를 켜야 실행할 수 있습니다.</noscript>
   <script src="./config/allowed-trainers.js"></script>
-  <script defer src="./dist/main.js?v=1.0.20260730.12"></script>
+  <script defer src="./dist/main.js?v=1.0.20260730.14"></script>
   <script>
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
       window.addEventListener("load", function () {

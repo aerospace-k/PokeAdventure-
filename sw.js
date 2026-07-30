@@ -1,4 +1,4 @@
-const CACHE_NAME = "pokemon-learning-adventure-v1.0.52";
+const CACHE_NAME = "pokemon-learning-adventure-v1.0.56";
 const APP_SHELL = [
   "./",
   "./index.html",
