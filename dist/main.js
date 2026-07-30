@@ -1349,6 +1349,7 @@ function renderPokedexIntro(unlocked) {
     const progressTrack = document.createElement("div");
     const progressFill = document.createElement("i");
     progressFill.style.width = unlocked / POKEMON.length * 100 + "%";
+    progressFill.style.minWidth = unlocked > 0 ? ".75rem" : "0";
     progressTrack.append(progressFill);
     const stats = document.createElement("div");
     stats.className = "pokedex-intro-stats";
@@ -1389,6 +1390,7 @@ function renderTrainerAlbumIntro(unlocked) {
     const progressTrack = document.createElement("div");
     const progressFill = document.createElement("i");
     progressFill.style.width = unlocked / TRAINER_CHOICES.length * 100 + "%";
+    progressFill.style.minWidth = unlocked > 0 ? ".75rem" : "0";
     progressTrack.append(progressFill);
     const stats = document.createElement("div");
     stats.className = "pokedex-intro-stats";
