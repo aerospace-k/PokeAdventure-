@@ -220,15 +220,14 @@ function trainerTierAtLevel(level) {
         return "great";
     return "starter";
 }
-const TRAINER_LEVELS = Array.from({ length: 100 }, (_, index) => {
+const TRAINER_LEVELS = Array.from({ length: 124 }, (_, index) => {
     const level = index + 1;
     const trainerReward = level >= 5 && level <= 95 && level % 5 === 0;
     return {
         level,
-        minStars: index * 5,
+        minStars: index * (index + 19) / 2,
         title: trainerTitleAtLevel(level),
-        reward: level === 1 ? "피카츄와 지우" : trainerReward ? "새 포켓몬과 트레이너" : "새 포켓몬",
-        dexBonus: 0,
+        reward: level === 1 ? "피카츄와 지우" : trainerReward ? "새 트레이너" : level % 5 === 0 ? "성장 배지" : "새 포켓몬",
         tier: trainerTierAtLevel(level)
     };
 });
@@ -385,7 +384,8 @@ function initializeProgressionRules() {
     safeSet(STORAGE.progressionRules, PROGRESSION_RULESET);
 }
 function unlockedPokemonCountAtLevel(level) {
-    return Math.min(POKEMON.length, Math.max(1, Math.floor(level)));
+    level = Math.max(1, Math.floor(level));
+    return Math.min(POKEMON.length, level - Math.floor(level / 5));
 }
 function trainerUnlockLevel(index) {
     return index === 0 ? 1 : index * 5;
@@ -781,9 +781,9 @@ function showMistakeEncounter(attempt) {
         encounter.append(prepareTransientMedia(pokemonMedia(pokemonById(92), "mistake-character")));
         playPokemonCry(92, .12);
     }
-    else if (Math.random() < .5) {
-        title.textContent = "팬텀이 정답을 공개했어요";
-        message.textContent = "설명을 읽고 다음 문제에 도전해요.";
+    else if (attempt === 3 || Math.random() < .5) {
+        title.textContent = "팬텀이 집중을 흐트렸어요";
+        message.textContent = "잠깐 숨을 고르고 단서를 다시 살펴봐요.";
         encounter.append(prepareTransientMedia(pokemonMedia(pokemonById(94), "mistake-character")));
         playPokemonCry(94, .13);
     }
@@ -857,7 +857,11 @@ window.addEventListener("poke-update-ready", () => {
 const state = { grade: null, mode: null, diff: "easy" };
 function showScreen(name) {
     document.querySelectorAll(".screen").forEach((screen) => screen.classList.remove("active"));
-    byId("screen-" + name).classList.add("active");
+    const screen = byId("screen-" + name);
+    screen.classList.add("active");
+    screen.scrollTop = 0;
+    document.scrollingElement.scrollTop = 0;
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => { document.scrollingElement.scrollTop = 0; }));
 }
 function setActiveNav(name) {
     document.querySelectorAll("[data-nav]").forEach((button) => {
@@ -1352,7 +1356,7 @@ function renderPokedexIntro(unlocked) {
     const title = document.createElement("h3");
     title.textContent = "오박사의 연구 노트";
     const message = document.createElement("p");
-    message.textContent = "레벨이 오를 때마다 인기순으로 새로운 포켓몬을 발견해요. 보유한 포켓몬을 선택해 보세요.";
+    message.textContent = "5배수 레벨 외에는 인기순 새 포켓몬을 발견해요. 보유 포켓몬을 선택해 보세요.";
     const progress = document.createElement("div");
     progress.className = "pokedex-intro-progress";
     const progressLabel = document.createElement("span");
@@ -1373,8 +1377,7 @@ function renderPokedexIntro(unlocked) {
     });
     const tip = document.createElement("small");
     const nextPokemon = POKEMON[unlocked];
-    const trainerProgress = getTrainerProgress();
-    tip.textContent = unlocked >= POKEMON.length ? "도감을 완성했어요!" : "다음 연구: " + nextPokemon.name + " · 다음 레벨까지 별 " + trainerProgress.remaining + "개";
+    tip.textContent = unlocked >= POKEMON.length ? "도감을 완성했어요!" : "다음: " + nextPokemon.name + " · Lv." + (unlocked + 1 + Math.floor(unlocked / 4)) + "에 발견";
     progress.append(progressLabel, progressTrack);
     copy.append(kicker, title, message, progress, stats, tip);
     detail.append(oak, copy);
@@ -1799,7 +1802,7 @@ function startSelectedGame(reviewCurrentGame = false) {
         rowlet.alt = "나몰빼미";
         rowlet.loading = "eager";
         spaceMascot.replaceChildren(rowlet);
-        startSpace();
+        startSpace(reviewCurrentGame ? spaceReviewQuestions ?? undefined : undefined);
     }
     if (state.mode === "mine")
         startMine();
@@ -2703,10 +2706,10 @@ function flipMemoryCard(index) {
         if (confused) {
             memory.score = Math.max(0, memory.score - 80);
             memory.energy = 1;
-            byId("memoryStatus").textContent = "고오스의 기억 안개! 100점이 줄었지만 에너지 1칸을 회복했어요.";
+            byId("memoryStatus").textContent = "팬텀의 기억 장난! 100점이 줄었지만 에너지 1칸을 회복했어요.";
             byId("screen-memory").classList.add("memory-confused");
             playPokemonCry(94, .18);
-            showMistakeEncounter(2);
+            showMistakeEncounter(3);
         }
         else {
             byId("memoryStatus").textContent = `서로 다른 변신이에요. 기억 에너지 ${memory.energy}칸!`;
@@ -3228,6 +3231,7 @@ function finishBalloon() {
     showResult(stars, "푸린 풍선 터뜨리기 완료", game.popped + "개의 정답 풍선을 터뜨렸어요.", [[String(game.score), "점수"], [String(game.popped), "정답"], [String(game.best), "최고 연속"], ["60초", "시간"]]);
 }
 let space = null;
+let spaceReviewQuestions = null;
 const SHAPE_LABELS = {
     circle: "원", triangle: "삼각형", square: "정사각형", rectangle: "직사각형",
     diamond: "마름모", trapezoid: "사다리꼴", pentagon: "오각형", hexagon: "육각형"
@@ -3787,8 +3791,13 @@ function stopSpace() {
     if (space.nextTimer !== null)
         window.clearTimeout(space.nextTimer);
 }
-function startSpace() {
-    space = { running: true, locked: false, index: 0, score: 0, correct: 0, streak: 0, best: 0, started: Date.now(), timer: null, nextTimer: null, current: null };
+function startSpace(reviewQuestions) {
+    const isReview = Boolean(reviewQuestions?.length);
+    const questions = isReview
+        ? [...reviewQuestions]
+        : Array.from({ length: 10 }, (_, index) => makeSpaceQuestion(index));
+    spaceReviewQuestions = null;
+    space = { running: true, locked: false, index: 0, score: 0, correct: 0, streak: 0, best: 0, started: Date.now(), timer: null, nextTimer: null, current: null, questions, answers: [], isReview };
     showScreen("space");
     showThemedGameScene("space", "나몰빼미 도형 공간 탐험", "숲의 단서를 관찰하고 공간 문제를 해결해요!", 1000);
     space.timer = appSetInterval(() => {
@@ -3803,12 +3812,12 @@ function startSpace() {
 function nextSpaceQuestion() {
     if (!space?.running)
         return;
-    if (space.index >= 10) {
+    if (space.index >= space.questions.length) {
         finishSpace();
         return;
     }
     space.locked = false;
-    space.current = makeSpaceQuestion(space.index);
+    space.current = space.questions[space.index];
     const labels = { shape: "도형 판별", rotation: "공간 회전", blocks: "쌓기나무", net: "전개도", pattern: "도형 규칙", mirror: "거울 대칭", topview: "위에서 본 모양" };
     const hints = {
         shape: "도형을 돌려도 노란 표식과 빨간 꼭짓점의 상대 위치는 바뀌지 않아요.",
@@ -3834,59 +3843,58 @@ function nextSpaceQuestion() {
         button.className = "space-choice";
         button.setAttribute("aria-label", (index + 1) + "번 " + choice.label);
         button.append(choice.visual);
-        button.addEventListener("click", () => answerSpace(choice.correct, button));
+        button.addEventListener("click", () => answerSpace(index, button));
         choices.append(button);
     });
     renderSpaceHud();
 }
-function answerSpace(correct, selected) {
+function answerSpace(selectedIndex, selected) {
     if (!space?.running || space.locked || !space.current)
         return;
-    const mistakes = choiceMistakeCount("spaceChoices");
-    if (!correct) {
-        space.streak = 0;
-        const buttons = Array.from(byId("spaceChoices").querySelectorAll(".space-choice"));
-        const answerIndex = space.current.choices.findIndex((choice) => choice.correct);
-        const retry = applyChoicePenalty("spaceChoices", ".space-choice", selected, buttons[answerIndex], byId("spaceFeedback"), "고오스가 시야를 흐렸어요. 관찰 팁을 읽고 다시 골라요!", "두 번 틀렸어요. 빛나는 정답 모양을 천천히 비교해 보세요.");
-        renderSpaceHud();
-        if (retry)
-            return;
-    }
+    const question = space.current;
+    const correctIndex = question.choices.findIndex((choice) => choice.correct);
+    const correct = selectedIndex === correctIndex;
+    const buttons = Array.from(byId("spaceChoices").querySelectorAll(".space-choice"));
     space.locked = true;
+    space.answers.push({ question, selected: selectedIndex, correct });
+    buttons.forEach((button, index) => {
+        button.disabled = true;
+        if (index === correctIndex)
+            button.classList.add("correct");
+    });
     if (correct) {
         const baseScore = 100 + space.streak * 15;
-        const gained = mistakes ? Math.round(baseScore * .5) : baseScore;
-        space.score += gained;
+        space.score += baseScore;
         space.correct += 1;
         space.streak += 1;
         space.best = Math.max(space.best, space.streak);
         selected.classList.add("correct");
-        byId("spaceFeedback").textContent = mistakes ? "재도전 성공! 관찰 점수 +" + gained : "정확해요! 공간을 잘 떠올렸어요. +" + gained;
+        byId("spaceFeedback").textContent = "정확해요! 공간을 잘 떠올렸어요. +" + baseScore;
         correctSound();
     }
     else {
         space.streak = 0;
         selected.classList.add("wrong");
+        byId("spaceFeedback").textContent = "아쉬워요. 빛나는 정답을 확인하고 다음 문제에서 다시 관찰해 보세요.";
+        wrongSound();
     }
     renderSpaceHud();
-    const nextDelay = !correct && mistakes > 0
-        ? FINAL_MISTAKE_HOLD_MS + MISTAKE_ENCOUNTER_EXIT_MS
-        : (correct ? 850 : 1350);
     space.nextTimer = window.setTimeout(() => {
         if (!space?.running)
             return;
         space.index += 1;
         space.nextTimer = null;
         nextSpaceQuestion();
-    }, nextDelay);
+    }, correct ? 1350 : 1850);
 }
 function renderSpaceHud() {
     if (!space)
         return;
     const seconds = Math.min(MAX_GAME_SECONDS, Math.floor((Date.now() - space.started) / 1000));
+    const total = space.questions.length;
     byId("spaceScore").textContent = String(space.score);
     byId("spaceTime").textContent = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
-    byId("spaceCount").textContent = "문제 " + Math.min(10, space.index + 1) + "/10";
+    byId("spaceCount").textContent = "문제 " + Math.min(total, space.index + 1) + "/" + total;
     byId("spaceStreak").textContent = String(space.streak);
 }
 function finishSpace() {
@@ -3894,11 +3902,73 @@ function finishSpace() {
         return;
     const game = space;
     stopSpace();
-    const accuracy = Math.round(game.correct / 10 * 100);
+    const total = game.questions.length;
+    const accuracy = Math.round(game.correct / total * 100);
     const stars = accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : accuracy >= 40 ? 1 : 0;
-    saveRecord({ name: getName() || "친구", mode: "space", grade: state.grade, diff: "easy", score: game.score, stars, detail: game.correct + "/10 · 공간", timestamp: Date.now() });
+    saveRecord({ name: getName() || "친구", mode: "space", grade: state.grade, diff: "easy", score: game.score, stars, detail: game.correct + "/" + total + " · 공간", timestamp: Date.now() });
     showThemedGameScene("space", "숲속 관찰 완료!", "나몰빼미와 도형·공간 단서를 해결했어요.", 1700);
-    showResult(stars, "도형·공간 탐험 완료", game.correct + "개의 공간 문제를 해결했어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/10", "정답"], [String(game.best), "최고 연속"]]);
+    showResult(stars, game.isReview ? "도형 오답 복습 완료!" : "도형·공간 탐험 완료", game.correct + "개의 공간 문제를 해결했어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/" + total, "정답"], [String(game.best), "최고 연속"]]);
+    renderSpaceResultReview(game);
+}
+function renderSpaceResultReview(game) {
+    const panel = byId("knowledgeResultReview");
+    const missedQuestions = game.questions.filter((_, index) => !game.answers[index]?.correct);
+    const kindLabels = { shape: "도형 판별", rotation: "공간 회전", blocks: "쌓기나무", net: "전개도", pattern: "도형 규칙", mirror: "거울 대칭", topview: "위에서 본 모양" };
+    spaceReviewQuestions = missedQuestions.length ? missedQuestions : null;
+    panel.replaceChildren();
+    panel.classList.remove("hidden-panel");
+    const heading = document.createElement("h3");
+    heading.textContent = "도형·공간 결과표";
+    const summary = document.createElement("p");
+    summary.className = "knowledge-result-summary";
+    summary.textContent = missedQuestions.length
+        ? "한 번씩 선택한 결과예요. 다시 볼 문제의 정답과 관찰 팁을 확인해요."
+        : "모든 도형·공간 문제를 정확히 해결했어요!";
+    panel.append(heading, summary);
+    const kindGrid = document.createElement("div");
+    kindGrid.className = "knowledge-category-results";
+    Object.keys(kindLabels).forEach((kind) => {
+        const indexes = game.questions.map((question, index) => question.kind === kind ? index : -1).filter((index) => index >= 0);
+        if (!indexes.length)
+            return;
+        const item = document.createElement("div");
+        const label = document.createElement("span");
+        label.textContent = kindLabels[kind];
+        const value = document.createElement("b");
+        value.textContent = indexes.filter((index) => game.answers[index]?.correct).length + " / " + indexes.length;
+        item.append(label, value);
+        kindGrid.append(item);
+    });
+    panel.append(kindGrid);
+    if (missedQuestions.length) {
+        const details = document.createElement("details");
+        details.className = "knowledge-missed-review";
+        const detailsSummary = document.createElement("summary");
+        detailsSummary.textContent = "다시 볼 문제 " + missedQuestions.length + "개";
+        const list = document.createElement("ol");
+        game.questions.forEach((question, index) => {
+            const answer = game.answers[index];
+            if (answer?.correct)
+                return;
+            const correctIndex = question.choices.findIndex((choice) => choice.correct);
+            const item = document.createElement("li");
+            const prompt = document.createElement("strong");
+            prompt.textContent = kindLabels[question.kind] + " · " + question.title;
+            const selected = document.createElement("p");
+            selected.className = "knowledge-review-selected";
+            selected.textContent = answer ? "내가 고른 답: " + question.choices[answer.selected]?.label : "시간 안에 풀지 못한 문제예요.";
+            const correctAnswer = document.createElement("p");
+            correctAnswer.className = "knowledge-review-correct";
+            correctAnswer.textContent = "정답: " + question.choices[correctIndex]?.label;
+            const guide = document.createElement("p");
+            guide.textContent = question.instruction;
+            item.append(prompt, selected, correctAnswer, guide);
+            list.append(item);
+        });
+        details.append(detailsSummary, list);
+        panel.append(details);
+    }
+    byId("resultRetry").textContent = missedQuestions.length ? "틀린 문제 다시 풀기" : "새로운 10문제";
 }
 let snack = null;
 const SNACK_ITEM_IMAGES = {
@@ -4245,6 +4315,7 @@ function checkSymmetry() {
         byId("symmetryStatus").textContent = "회로가 어긋났어요. 대칭축에서 같은 거리인지 다시 살펴봐요.";
         byId("screen-symmetry").classList.add("circuit-error");
         wrongSound();
+        showMistakeEncounter(symmetry.mistakes % 2 ? 1 : 3);
         showToast("대칭축을 기준으로 같은 거리를 살펴보세요.");
     }
     renderSymmetry();
@@ -5445,6 +5516,7 @@ function setupMineStage(stage) {
     mine.cells = [];
     const board = byId("mineBoard");
     board.style.setProperty("--mine-cols", String(config.columns));
+    board.style.setProperty("--voltorb-board-columns", String(config.columns));
     board.setAttribute("aria-rowcount", String(config.rows));
     board.setAttribute("aria-colcount", String(config.columns));
     board.dataset.size = String(config.columns);
@@ -6282,7 +6354,7 @@ function renderIdentityPicker() {
         ? "함께 공부할 포켓몬을 골라요"
         : "상단에 표시할 트레이너를 골라요";
     byId("avatarCountText").textContent = pokemonStep
-        ? "보유 " + pokemonOwned + " / " + POKEMON.length + " · 레벨업마다 인기순 1마리"
+        ? "보유 " + pokemonOwned + " / " + POKEMON.length + " · 5배수 외 레벨에서 인기순 1마리"
         : "보유 " + trainerOwned + " / " + TRAINER_CHOICES.length + " · 5레벨마다 인기순 1명";
     byId("identityPickerHint").textContent = avatarChanging
         ? "두 탭을 오가며 원하는 조합을 선택한 뒤 선택 완료를 눌러요."
@@ -6294,11 +6366,12 @@ function renderIdentityPicker() {
     if (pokemonStep)
         POKEMON.forEach((pokemon, index) => {
             const unlocked = index < pokemonOwned;
+            const requiredLevel = index + 1 + Math.floor(index / 4);
             const button = document.createElement("button");
             button.type = "button";
             button.disabled = !unlocked;
             button.className = "avatar-button" + (unlocked ? "" : " progression-locked") + (unlocked && pokemon.id === getAvatarId() ? " selected" : "");
-            button.setAttribute("aria-label", unlocked ? pokemon.name + " 선택" : pokemon.name + " · 레벨 " + (index + 1) + "에 획득");
+            button.setAttribute("aria-label", unlocked ? pokemon.name + " 선택" : pokemon.name + " · 레벨 " + requiredLevel + "에 획득");
             button.append(pokemonAvatarMedia(pokemon));
             const label = document.createElement("small");
             label.textContent = pokemon.name;
@@ -6306,7 +6379,7 @@ function renderIdentityPicker() {
             if (!unlocked) {
                 const lock = document.createElement("span");
                 lock.className = "avatar-unlock-badge";
-                lock.textContent = "Lv." + (index + 1);
+                lock.textContent = "Lv." + requiredLevel;
                 button.append(lock);
             }
             else {
@@ -6605,10 +6678,11 @@ function bindEvents() {
                 buildModes();
             }
             if (action === "retry") {
-                const reviewAvailable = state.mode === "knowledge" ? Boolean(knowledgeReviewQuestions?.length)
-                    : state.mode === "history" ? Boolean(historyReviewEvents?.length)
-                        : state.mode === "safety" ? Boolean(safetyReviewQuestions?.length)
-                            : false;
+                const reviewAvailable = state.mode === "space" ? Boolean(spaceReviewQuestions?.length)
+                    : state.mode === "knowledge" ? Boolean(knowledgeReviewQuestions?.length)
+                        : state.mode === "history" ? Boolean(historyReviewEvents?.length)
+                            : state.mode === "safety" ? Boolean(safetyReviewQuestions?.length)
+                                : false;
                 startSelectedGame(reviewAvailable);
             }
         });
