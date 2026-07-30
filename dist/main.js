@@ -2076,8 +2076,8 @@ function startRain() {
     const config = RAIN_CONFIG[state.diff];
     const started = lifecycleNow();
     rain = {
-        running: true, finished: false, hp: 5, score: 0, popped: 0, input: "", drops: [],
-        speed: config.speed, gap: config.gap, maxDrops: config.max, started,
+        running: true, finished: false, hp: 3, score: 0, popped: 0, input: "", drops: [],
+        gap: config.gap, maxDrops: config.max, started,
         lastFrame: started, lastSpawn: started, raf: 0, watchdog: 0, wave: 1, trapsAvoided: 0
     };
     byId("rainField").querySelectorAll(".rain-drop").forEach((drop) => drop.remove());
@@ -2178,7 +2178,6 @@ function rainFrame(now) {
                 break;
         }
     }
-    byId("rainSpeed").textContent = multiplier.toFixed(1);
     renderRainHud();
     if (rain.running)
         rain.raf = appRequestAnimationFrame(rainFrame);
@@ -2195,10 +2194,10 @@ function spawnRainDrop() {
     const trap = elapsed >= 18 && !rain.drops.some((item) => item.trap) && Math.random() < Math.min(.22, .1 + elapsed * .0007);
     for (let attempt = 0; trap && attempt < 4 && rain.drops.some((item) => item.answer === problem.answer); attempt += 1)
         problem = newProblem(phase);
-    const heal = !trap && rain.hp < 5 && Math.random() < .14;
+    const heal = !trap && rain.hp < 3 && Math.random() < .14;
     const drop = document.createElement("div");
     drop.className = "rain-drop" + (heal ? " heal" : "") + (trap ? " trap" : "");
-    drop.textContent = (trap ? "함정 · " : heal ? "회복 · " : "") + problem.display + " = ?";
+    drop.textContent = (heal ? "회복 · " : "") + problem.display + " = ?";
     if (trap)
         drop.setAttribute("aria-label", "로켓단 함정입니다. 답을 입력하지 마세요.");
     const width = field.clientWidth;
@@ -2289,7 +2288,7 @@ function rainSubmit() {
             rain.score += 100;
             rain.popped += 1;
             if (drop.heal)
-                rain.hp = Math.min(5, rain.hp + 1);
+                rain.hp = Math.min(3, rain.hp + 1);
             correctSound();
         }
     }
@@ -2303,7 +2302,7 @@ function rainSubmit() {
 function renderRainHud() {
     if (!rain)
         return;
-    byId("rainHp").textContent = "❤️".repeat(Math.max(0, rain.hp)) + "🤍".repeat(Math.max(0, 5 - rain.hp));
+    byId("rainHp").textContent = "❤️".repeat(Math.max(0, rain.hp)) + "🤍".repeat(Math.max(0, 3 - rain.hp));
     byId("rainScore").textContent = String(rain.score);
     byId("rainWave").textContent = String(rain.wave);
     byId("rainInput").textContent = rain.input || "?";
@@ -6351,11 +6350,11 @@ function renderIdentityPicker() {
     trainerTab.setAttribute("aria-selected", String(!pokemonStep));
     trainerTab.disabled = !avatarChanging && !hasSavedAvatar();
     byId("avatarPickerTitle").textContent = pokemonStep
-        ? "함께 공부할 포켓몬을 골라요"
-        : "상단에 표시할 트레이너를 골라요";
+        ? "보유한 파트너 포켓몬을 골라요"
+        : "보유한 트레이너를 골라요";
     byId("avatarCountText").textContent = pokemonStep
-        ? "보유 " + pokemonOwned + " / " + POKEMON.length + " · 5배수 외 레벨에서 인기순 1마리"
-        : "보유 " + trainerOwned + " / " + TRAINER_CHOICES.length + " · 5레벨마다 인기순 1명";
+        ? "선택 가능 " + pokemonOwned + "마리 · 전체 보유 포켓몬"
+        : "선택 가능 " + trainerOwned + "명 · 전체 보유 트레이너";
     byId("identityPickerHint").textContent = avatarChanging
         ? "두 탭을 오가며 원하는 조합을 선택한 뒤 선택 완료를 눌러요."
         : pokemonStep
@@ -6364,47 +6363,33 @@ function renderIdentityPicker() {
     const grid = byId("avatarGrid");
     grid.replaceChildren();
     if (pokemonStep)
-        POKEMON.forEach((pokemon, index) => {
-            const unlocked = index < pokemonOwned;
-            const requiredLevel = index + 1 + Math.floor(index / 4);
+        POKEMON.slice(0, pokemonOwned).forEach((pokemon) => {
             const button = document.createElement("button");
             button.type = "button";
-            button.disabled = !unlocked;
-            button.className = "avatar-button" + (unlocked ? "" : " progression-locked") + (unlocked && pokemon.id === getAvatarId() ? " selected" : "");
-            button.setAttribute("aria-label", unlocked ? pokemon.name + " 선택" : pokemon.name + " · 레벨 " + requiredLevel + "에 획득");
+            button.className = "avatar-button" + (pokemon.id === getAvatarId() ? " selected" : "");
+            button.setAttribute("aria-label", pokemon.name + " 선택");
             button.append(pokemonAvatarMedia(pokemon));
             const label = document.createElement("small");
             label.textContent = pokemon.name;
             button.append(label);
-            if (!unlocked) {
-                const lock = document.createElement("span");
-                lock.className = "avatar-unlock-badge";
-                lock.textContent = "Lv." + requiredLevel;
-                button.append(lock);
-            }
-            else {
-                button.addEventListener("click", () => {
-                    setAvatarId(pokemon.id);
-                    selectSound();
-                    playPokemonCry(pokemon.id, .18);
-                    if (avatarChanging)
-                        renderIdentityPicker();
-                    else
-                        setIdentityPickerStep("trainer");
-                });
-            }
+            button.addEventListener("click", () => {
+                setAvatarId(pokemon.id);
+                selectSound();
+                playPokemonCry(pokemon.id, .18);
+                if (avatarChanging)
+                    renderIdentityPicker();
+                else
+                    setIdentityPickerStep("trainer");
+            });
             grid.append(button);
         });
     if (!pokemonStep)
-        TRAINER_CHOICES.forEach((trainer, index) => {
-            const unlocked = index < trainerOwned;
-            const requiredLevel = trainerUnlockLevel(index);
+        TRAINER_CHOICES.slice(0, trainerOwned).forEach((trainer) => {
             const button = document.createElement("button");
             button.type = "button";
-            button.disabled = !unlocked;
             button.dataset.trainerId = trainer.id;
-            button.className = "avatar-button trainer-choice-button" + (unlocked ? "" : " progression-locked") + (unlocked && trainer.id === getTrainerChoice().id ? " selected" : "");
-            button.setAttribute("aria-label", unlocked ? trainer.name + " 트레이너 선택 · " + trainer.region : trainer.name + " 트레이너 · 레벨 " + requiredLevel + "에 획득");
+            button.className = "avatar-button trainer-choice-button" + (trainer.id === getTrainerChoice().id ? " selected" : "");
+            button.setAttribute("aria-label", trainer.name + " 트레이너 선택 · " + trainer.region);
             button.append(trainerMedia(trainer.file, trainer.name, "trainer-choice-media"));
             const label = document.createElement("small");
             const name = document.createElement("b");
@@ -6413,22 +6398,14 @@ function renderIdentityPicker() {
             region.textContent = trainer.region;
             label.append(name, region);
             button.append(label);
-            if (!unlocked) {
-                const lock = document.createElement("span");
-                lock.className = "avatar-unlock-badge";
-                lock.textContent = "Lv." + requiredLevel;
-                button.append(lock);
-            }
-            else {
-                button.addEventListener("click", () => {
-                    setTrainerChoice(trainer.id);
-                    selectSound();
-                    if (avatarChanging)
-                        renderIdentityPicker();
-                    else
-                        enterApp();
-                });
-            }
+            button.addEventListener("click", () => {
+                setTrainerChoice(trainer.id);
+                selectSound();
+                if (avatarChanging)
+                    renderIdentityPicker();
+                else
+                    enterApp();
+            });
             grid.append(button);
         });
 }
