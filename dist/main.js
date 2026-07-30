@@ -328,13 +328,6 @@ const GAME_POKEMON_NAMES = {
     100: "찌리리공",
     113: "럭키"
 };
-const GHOST_PENALTY_POKEMON_IDS = [
-    92, 93, 94, 200, 292, 302, 353, 354, 355, 356, 425, 426, 429, 442, 477, 478, 479, 607, 608, 609, 708, 709, 710, 711, 769, 770, 778
-];
-function randomGhostPokemonId(severe = false) {
-    const pool = severe ? GHOST_PENALTY_POKEMON_IDS.slice(2) : GHOST_PENALTY_POKEMON_IDS;
-    return pool[Math.floor(Math.random() * pool.length)] ?? 94;
-}
 function pokemonById(id) {
     return POKEMON.find((pokemon) => pokemon.id === id) ?? {
         id,
@@ -761,6 +754,18 @@ function resetChoicePenalty(containerId) {
     delete container.dataset.choiceMistakes;
     container.classList.remove("choice-penalty-lock");
 }
+const FIRST_MISTAKE_HOLD_MS = 1200;
+const FINAL_MISTAKE_HOLD_MS = 3200;
+const MISTAKE_ENCOUNTER_EXIT_MS = 220;
+function prepareTransientMedia(media) {
+    const image = media.querySelector("img");
+    if (image) {
+        image.loading = "eager";
+        image.decoding = "async";
+        image.fetchPriority = "high";
+    }
+    return media;
+}
 function showMistakeEncounter(attempt) {
     document.querySelector(".mistake-encounter")?.remove();
     const encounter = document.createElement("aside");
@@ -773,24 +778,30 @@ function showMistakeEncounter(attempt) {
     if (attempt === 1) {
         title.textContent = "고오스의 방해!";
         message.textContent = "잠깐 멈추고 다시 생각해 봐요.";
-        encounter.append(pokemonMedia(pokemonById(92), "mistake-character"));
+        encounter.append(prepareTransientMedia(pokemonMedia(pokemonById(92), "mistake-character")));
         playPokemonCry(92, .12);
     }
     else if (Math.random() < .5) {
         title.textContent = "팬텀이 정답을 공개했어요";
         message.textContent = "설명을 읽고 다음 문제에 도전해요.";
-        encounter.append(pokemonMedia(pokemonById(randomGhostPokemonId()), "mistake-character"));
+        encounter.append(prepareTransientMedia(pokemonMedia(pokemonById(94), "mistake-character")));
         playPokemonCry(94, .13);
     }
     else {
         title.textContent = "로켓단이 콤보를 가져갔어요";
         message.textContent = "정답을 확인하고 다시 출발해요.";
-        encounter.append(trainerMedia("jessiejames-gen1.png", "로켓단", "mistake-character"));
+        encounter.append(prepareTransientMedia(trainerMedia("jessiejames-gen1.png", "로켓단", "mistake-character")));
     }
     copy.append(title, message);
     encounter.append(copy);
     document.body.append(encounter);
-    window.setTimeout(() => encounter.remove(), attempt === 1 ? 1200 : 1900);
+    const holdMs = attempt === 1 ? FIRST_MISTAKE_HOLD_MS : FINAL_MISTAKE_HOLD_MS;
+    window.setTimeout(() => {
+        if (!encounter.isConnected)
+            return;
+        encounter.classList.add("leaving");
+        window.setTimeout(() => encounter.remove(), MISTAKE_ENCOUNTER_EXIT_MS);
+    }, holdMs);
 }
 function applyChoicePenalty(containerId, selector, selected, correctButton, feedback, firstMessage, finalMessage) {
     const container = byId(containerId);
@@ -2021,12 +2032,15 @@ function answerQuiz(value, selected) {
             wrongSound();
     }
     renderQuizDots();
+    const nextDelay = !correct && selected && mistakes > 0
+        ? FINAL_MISTAKE_HOLD_MS + MISTAKE_ENCOUNTER_EXIT_MS
+        : (correct ? 850 : 1350);
     window.setTimeout(() => {
         if (!quiz)
             return;
         quiz.index += 1;
         nextQuizQuestion();
-    }, correct ? 850 : 1350);
+    }, nextDelay);
 }
 function finishQuiz() {
     if (!quiz || state.grade === null)
@@ -2435,15 +2449,8 @@ function showMoleSuccess(index, gained, bonus, combo) {
     hole.button.parentElement?.classList.add("hit-success");
     if (bonus)
         hole.button.parentElement?.classList.add("bonus-success");
-    celebration.className = "mole-celebration";
-    celebration.replaceChildren();
-    const localCelebration = document.createElement("div");
-    const row = Math.floor(index / 3);
-    const column = index % 3;
-    localCelebration.className = "mole-local-celebration " + (row === 0 ? "place-below" : "place-above") + " column-" + column + (bonus ? " bonus" : "");
-    localCelebration.innerHTML = "<strong>" + (bonus ? "두트리오 대성공!" : "정답!") + "</strong><span>+" + gained + "점" + (combo >= 2 ? " · " + combo + "연속" : "") + "</span>";
-    hole.button.parentElement?.querySelector(".mole-local-celebration")?.remove();
-    hole.button.parentElement?.append(localCelebration);
+    celebration.className = "mole-celebration show" + (bonus ? " bonus" : "");
+    celebration.innerHTML = "<strong>" + (bonus ? "두트리오 대성공!" : "정답!") + "</strong><span>+" + gained + "점" + (combo >= 2 ? " · " + combo + "연속" : "") + "</span>";
     screen.classList.remove("mole-correct-flash", "mole-bonus-flash");
     void screen.offsetWidth;
     screen.classList.add(bonus ? "mole-bonus-flash" : "mole-correct-flash");
@@ -2452,11 +2459,10 @@ function showMoleSuccess(index, gained, bonus, combo) {
         navigator.vibrate(bonus ? [45, 35, 80] : 45);
     window.setTimeout(() => {
         scorePop.remove();
-        localCelebration.remove();
         celebration.className = "mole-celebration";
         celebration.replaceChildren();
         screen.classList.remove("mole-correct-flash", "mole-bonus-flash");
-    }, bonus ? 1000 : 760);
+    }, bonus ? 1100 : 900);
 }
 function clearActiveMoles() {
     if (!mole)
@@ -3155,7 +3161,7 @@ function balloonPenaltyBurst(origin, severe) {
     field.querySelector(".balloon-penalty-alert")?.remove();
     const alert = document.createElement("div");
     alert.className = `balloon-penalty-alert${severe ? " severe" : ""}`;
-    const ghost = pokemonMedia(pokemonById(randomGhostPokemonId(severe)), "balloon-penalty-pokemon");
+    const ghost = prepareTransientMedia(pokemonMedia(pokemonById(severe ? 94 : 92), "balloon-penalty-pokemon"));
     ghost.setAttribute("aria-hidden", "true");
     const message = document.createElement("strong");
     message.textContent = severe ? "팬텀 방해! 풍선을 다시 섞어요" : "고오스 방해! -50점 · -3초";
@@ -3166,7 +3172,12 @@ function balloonPenaltyBurst(origin, severe) {
     alert.style.setProperty("--penalty-x", `${alertX}px`);
     alert.style.setProperty("--penalty-y", `${Math.max(70, originRect.top - fieldRect.top)}px`);
     field.append(alert);
-    window.setTimeout(() => alert.remove(), severe ? 1150 : 800);
+    window.setTimeout(() => {
+        if (!alert.isConnected)
+            return;
+        alert.classList.add("leaving");
+        window.setTimeout(() => alert.remove(), MISTAKE_ENCOUNTER_EXIT_MS);
+    }, severe ? 2600 : 950);
 }
 function balloonRewardBurst(origin, points) {
     const field = byId("balloonField");
@@ -3858,13 +3869,16 @@ function answerSpace(correct, selected) {
         selected.classList.add("wrong");
     }
     renderSpaceHud();
+    const nextDelay = !correct && mistakes > 0
+        ? FINAL_MISTAKE_HOLD_MS + MISTAKE_ENCOUNTER_EXIT_MS
+        : (correct ? 850 : 1350);
     space.nextTimer = window.setTimeout(() => {
         if (!space?.running)
             return;
         space.index += 1;
         space.nextTimer = null;
         nextSpaceQuestion();
-    }, correct ? 850 : 1350);
+    }, nextDelay);
 }
 function renderSpaceHud() {
     if (!space)
@@ -4245,10 +4259,24 @@ function finishSymmetry() {
     showThemedGameScene("symmetry", "대칭 연구 완료!", "파치리스의 수정 회로가 환하게 충전됐어요.", 1700);
     showResult(stars, "전기 대칭 연구 완료!", "파치리스의 대칭 회로 5개를 모두 연결했어요.", [[String(game.score), "점수"], [String(game.mistakes), "실수"], [String(game.size) + "×" + game.size, "격자"], ["5/5", "충전"]]);
 }
+const COORDINATE_PENALTY_HOLD_MS = 2600;
 let coordinate = null;
-function stopCoordinate() { if (!coordinate)
-    return; coordinate.running = false; if (coordinate.timer !== null)
-    window.clearInterval(coordinate.timer); }
+function stopCoordinate() {
+    if (!coordinate)
+        return;
+    coordinate.running = false;
+    if (coordinate.timer !== null)
+        window.clearInterval(coordinate.timer);
+    if (coordinate.penaltyHoldTimer !== null)
+        window.clearTimeout(coordinate.penaltyHoldTimer);
+    if (coordinate.penaltyExitTimer !== null)
+        window.clearTimeout(coordinate.penaltyExitTimer);
+    const overlay = document.getElementById("coordinatePenalty");
+    if (overlay) {
+        overlay.hidden = true;
+        overlay.classList.remove("leaving");
+    }
+}
 const coordinateEven = () => randomInt(2, 24) * 2;
 const coordinateOdd = () => randomInt(1, 24) * 2 + 1;
 const COORDINATE_RULES = [
@@ -4266,7 +4294,7 @@ const COORDINATE_RULES = [
 function startCoordinate() {
     if (state.grade === null)
         return;
-    coordinate = { running: true, transitioning: false, stage: 0, score: 0, combo: 0, bestCombo: 0, shield: 3, mistakes: 0, timeLeft: 16, timer: null, packets: [], errorsTotal: 0, errorsRemaining: 0, started: Date.now() };
+    coordinate = { running: true, transitioning: false, stage: 0, score: 0, combo: 0, bestCombo: 0, shield: 3, mistakes: 0, timeLeft: 16, timer: null, penaltyHoldTimer: null, penaltyExitTimer: null, packets: [], errorsTotal: 0, errorsRemaining: 0, started: Date.now() };
     replaceWithPokemon(byId("coordinateMascot"), 137);
     replaceWithPokemon(byId("coordinatePenaltyPokemon"), 94);
     showScreen("coordinate");
@@ -4292,6 +4320,7 @@ function setupCoordinateStage() {
     coordinate.errorsRemaining = errorCount;
     coordinate.timeLeft = Math.max(9, 17 - coordinate.stage);
     coordinate.transitioning = false;
+    byId("coordinateStatus").textContent = "새 규칙을 확인하고 오류 패킷을 찾아 선택하세요.";
     renderCoordinate();
     armCoordinateTimer();
 }
@@ -4372,10 +4401,8 @@ function chooseCoordinatePacket(id, button) {
     flashCoordinatePenalty();
     updateCoordinateHud();
     window.setTimeout(() => button.classList.remove("wrong"), 650);
-    if (coordinate.shield <= 0) {
-        coordinate.transitioning = true;
-        window.setTimeout(() => finishCoordinate(false), 900);
-    }
+    if (coordinate.shield <= 0)
+        window.setTimeout(() => finishCoordinate(false), COORDINATE_PENALTY_HOLD_MS + MISTAKE_ENCOUNTER_EXIT_MS);
 }
 function updateCoordinateHud() {
     if (!coordinate)
@@ -4385,10 +4412,32 @@ function updateCoordinateHud() {
     byId("coordinateShield").textContent = coordinate.shield + "/3";
 }
 function flashCoordinatePenalty() {
+    if (!coordinate)
+        return;
+    if (coordinate.penaltyHoldTimer !== null)
+        window.clearTimeout(coordinate.penaltyHoldTimer);
+    if (coordinate.penaltyExitTimer !== null)
+        window.clearTimeout(coordinate.penaltyExitTimer);
     const overlay = byId("coordinatePenalty");
     overlay.hidden = false;
+    overlay.classList.remove("leaving");
+    coordinate.transitioning = true;
     byId("coordinateStatus").textContent = "정상 데이터였어요. 규칙을 다시 확인하세요!";
-    window.setTimeout(() => { overlay.hidden = true; }, 750);
+    coordinate.penaltyHoldTimer = window.setTimeout(() => {
+        if (!coordinate || !overlay.isConnected)
+            return;
+        overlay.classList.add("leaving");
+        coordinate.penaltyExitTimer = window.setTimeout(() => {
+            if (!coordinate)
+                return;
+            overlay.hidden = true;
+            overlay.classList.remove("leaving");
+            if (coordinate.running && coordinate.shield > 0)
+                coordinate.transitioning = false;
+            coordinate.penaltyExitTimer = null;
+        }, MISTAKE_ENCOUNTER_EXIT_MS);
+        coordinate.penaltyHoldTimer = null;
+    }, COORDINATE_PENALTY_HOLD_MS);
 }
 function failCoordinateStage(message) {
     if (!coordinate?.running || coordinate.transitioning)
@@ -4404,10 +4453,11 @@ function failCoordinateStage(message) {
     flashCoordinatePenalty();
     showToast(message);
     updateCoordinateHud();
+    const penaltyDelay = COORDINATE_PENALTY_HOLD_MS + MISTAKE_ENCOUNTER_EXIT_MS;
     if (coordinate.shield <= 0)
-        window.setTimeout(() => finishCoordinate(false), 900);
+        window.setTimeout(() => finishCoordinate(false), penaltyDelay);
     else
-        window.setTimeout(setupCoordinateStage, 900);
+        window.setTimeout(setupCoordinateStage, penaltyDelay);
 }
 function finishCoordinate(completed = true) {
     if (!coordinate?.running || state.grade === null)
@@ -6679,15 +6729,9 @@ const installCoordinateRuleDock = () => {
         const packetGrid = packets[0]?.parentElement;
         if (!packetGrid)
             return;
-        const ruleLeaf = Array.from(screen.querySelectorAll("*"))
-            .find((element) => {
-            if (element.closest("[data-coordinate-rule-dock]"))
-                return false;
-            if (element.children.length > 0)
-                return false;
-            return /^(정상|오류)\s*신호/.test(element.textContent?.trim() ?? "");
-        });
-        if (!ruleLeaf)
+        const ruleTitle = screen.querySelector("#coordinateRuleTitle");
+        const ruleMission = screen.querySelector("#coordinateMission");
+        if (!ruleTitle || !ruleMission)
             return;
         let dock = packetGrid.querySelector("[data-coordinate-rule-dock]");
         if (!dock) {
@@ -6702,17 +6746,16 @@ const installCoordinateRuleDock = () => {
             packetGrid.insertBefore(dock, packetGrid.firstChild);
         }
         const value = dock.querySelector(".coordinate-rule-dock__value");
-        if (value)
-            value.textContent = ruleLeaf.textContent?.trim() ?? "";
-        let sourcePanel = ruleLeaf.parentElement;
-        while (sourcePanel && sourcePanel !== screen) {
-            const text = sourcePanel.textContent ?? "";
-            if (text.includes("현재 판별 규칙") && text.includes("오류 데이터")) {
-                sourcePanel.dataset.coordinateRuleSource = "true";
-                break;
-            }
-            sourcePanel = sourcePanel.parentElement;
-        }
+        const hint = dock.querySelector(".coordinate-rule-dock__hint");
+        const nextTitle = ruleTitle.textContent?.trim() ?? "";
+        const nextMission = ruleMission.textContent?.trim() ?? "";
+        if (value && value.textContent !== nextTitle)
+            value.textContent = nextTitle;
+        if (hint && hint.textContent !== nextMission)
+            hint.textContent = nextMission;
+        const sourcePanel = ruleTitle.closest(".coordinate-rule-card");
+        if (sourcePanel)
+            sourcePanel.dataset.coordinateRuleSource = "true";
     };
     const queueRuleDockUpdate = () => {
         if (updateQueued)
