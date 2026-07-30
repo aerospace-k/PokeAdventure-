@@ -1,0 +1,8 @@
+.level-up-popup.trainer-unlock-popup{border-color:#28649b;background:radial-gradient(circle at 82% 18%,rgba(255,224,84,.42) 0 4.5rem,transparent 4.7rem),linear-gradient(155deg,#f3fbff,#e4f4ff 64%,#fff5bd)}
+.trainer-unlock-popup .level-up-label{background:#286aa5;box-shadow:0 3px 0 #174b7c}
+.trainer-unlock-popup .level-up-pokemon{filter:drop-shadow(0 .65rem .4rem rgba(31,72,113,.24))}
+.trainer-discovery-media{position:relative;display:grid;place-items:center;width:100%;height:100%}
+.trainer-discovery-media>span{position:absolute;inset:auto .2rem .1rem;padding:.18rem .3rem;border-radius:999px;background:rgba(255,255,255,.88);color:#285b8d;font-size:.58rem;font-weight:900;text-align:center}
+.trainer-discovery-media img{position:relative;z-index:1;width:100%;height:100%;object-fit:contain;object-position:center bottom;image-rendering:pixelated}
+.trainer-unlock-popup .level-up-reward-box{border-color:#2e70a6;background:rgba(236,248,255,.94)}
+.trainer-unlock-popup .level-up-reward-box :is(span,strong){color:#245b8a}

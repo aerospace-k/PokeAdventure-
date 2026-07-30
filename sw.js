@@ -1,4 +1,4 @@
-const CACHE_NAME = "pokemon-learning-adventure-v1.0.41";
+const CACHE_NAME = "pokemon-learning-adventure-v1.0.52";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,6 +6,8 @@ const APP_SHELL = [
   "./dist/styles.css",
   "./voltorb-enhancements.css",
   "./voltorb-enhancements.js",
+  "./trainer-unlock-enhancements.css",
+  "./trainer-unlock-enhancements.js",
   "./config/allowed-trainers.js",
   "./site.webmanifest",
   "./assets/pokeball-favicon.svg",
@@ -14,7 +16,7 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install",(event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL.map((path) => new Request(path,{cache:"reload"})))));
   self.skipWaiting();
 });
 

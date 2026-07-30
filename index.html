@@ -11,12 +11,13 @@
   <link rel="shortcut icon" href="./assets/pokeball-favicon-32.png?v=1.0.20260726.6">
   <link rel="apple-touch-icon" sizes="180x180" href="./assets/pokeball-apple-touch-icon.png?v=1.0.20260726.6">
   <link rel="manifest" href="./site.webmanifest?v=1.0.20260726.6">
-  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260730.05">
+  <link rel="stylesheet" href="./dist/styles.css?v=1.0.20260730.07">
   <script>document.documentElement.dataset.introScene = Math.random() < 0.5 ? "adventure" : "rocket";</script>
   <meta name="application-name" content="포켓몬 배움 탐험대">
   <meta name="app-version" content="1.0">
   <meta name="theme-color" content="#78c9f3">
-  <link rel="stylesheet" href="./voltorb-enhancements.css?v=1.0.3">
+  <link rel="stylesheet" href="./voltorb-enhancements.css?v=1.0.7">
+  <link rel="stylesheet" href="./trainer-unlock-enhancements.css?v=1.0.0">
 </head>
 <body>
   <div id="bgDeco" class="bg-deco" aria-hidden="true"></div>
@@ -586,7 +587,7 @@
 
   <noscript>이 게임은 JavaScript를 켜야 실행할 수 있습니다.</noscript>
   <script src="./config/allowed-trainers.js"></script>
-  <script defer src="./dist/main.js?v=1.0.20260730.05"></script>
+  <script defer src="./dist/main.js?v=1.0.20260730.12"></script>
   <script>
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
       window.addEventListener("load", function () {
@@ -612,6 +613,7 @@
       });
     }
   </script>
-  <script src="./voltorb-enhancements.js?v=1.0.3"></script>
+  <script src="./voltorb-enhancements.js?v=1.0.7"></script>
+  <script src="./trainer-unlock-enhancements.js?v=1.0.0"></script>
 </body>
 </html>
