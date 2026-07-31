@@ -1,5 +1,4 @@
 "use strict";
-/* Keep game loops fair when a phone locks or the browser moves to the background. */
 const nativeSetInterval = window.setInterval.bind(window);
 const nativeRequestAnimationFrame = window.requestAnimationFrame.bind(window);
 const nativeCancelAnimationFrame = window.cancelAnimationFrame.bind(window);
@@ -256,6 +255,7 @@ function pokemonUrl(id) {
     return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + id + ".png";
 }
 const TRAINER_SPRITE_BASE = "https://play.pokemonshowdown.com/sprites/trainers/";
+const TEAM_ROCKET_TRAINER_ASSET = "./assets/team-rocket-jessie-james-modern.png";
 const TRAINER_CATALOG = [
     { id: "ash", name: "지우", file: "ash.png", region: "관동" },
     { id: "misty", name: "이슬", file: "misty.png", region: "관동" },
@@ -276,7 +276,7 @@ const TRAINER_CATALOG = [
     { id: "elio", name: "영태", file: "elio.png", region: "알로라" },
     { id: "selene", name: "미월", file: "selene.png", region: "알로라" },
     { id: "lillie", name: "릴리에", file: "lillie.png", region: "알로라" },
-    { id: "rocket", name: "로켓단 로사·로이", file: "jessiejames-gen1.png", region: "로켓단" }
+    { id: "rocket", name: "로켓단 로사·로이", file: TEAM_ROCKET_TRAINER_ASSET, region: "로켓단" }
 ];
 const POPULAR_TRAINER_IDS = [
     "ash", "red", "misty", "brock", "serena", "dawn", "may", "lillie", "blue", "rocket",
@@ -308,7 +308,7 @@ function trainerMedia(file, name, className = "") {
     fallback.className = "trainer-fallback";
     fallback.textContent = name;
     const image = document.createElement("img");
-    image.src = TRAINER_SPRITE_BASE + file;
+    image.src = file.startsWith("./assets/") ? file : TRAINER_SPRITE_BASE + file;
     image.alt = name;
     image.loading = "lazy";
     image.decoding = "async";
@@ -366,13 +366,13 @@ function safeSet(key, value) {
     try {
         localStorage.setItem(key, value);
     }
-    catch { /* 저장 차단 시 현재 실행만 유지 */ }
+    catch { }
 }
 function safeRemove(key) {
     try {
         localStorage.removeItem(key);
     }
-    catch { /* 저장 차단 시 무시 */ }
+    catch { }
 }
 function initializeProgressionRules() {
     if (Date.now() < PROGRESSION_CUTOVER_AT || safeGet(STORAGE.progressionRules) === PROGRESSION_RULESET)
@@ -728,7 +728,7 @@ function playPokemonCry(id, volume = .16) {
         cryAudio.volume = volume;
         void cryAudio.play().catch(() => undefined);
     }
-    catch { /* 네트워크 또는 자동 재생 차단 시 합성 효과음만 사용 */ }
+    catch { }
 }
 function correctSound() {
     playNotes([
@@ -790,7 +790,7 @@ function showMistakeEncounter(attempt) {
     else {
         title.textContent = "로켓단이 콤보를 가져갔어요";
         message.textContent = "정답을 확인하고 다시 출발해요.";
-        encounter.append(prepareTransientMedia(trainerMedia("jessiejames-gen1.png", "로켓단", "mistake-character")));
+        encounter.append(prepareTransientMedia(trainerMedia(TEAM_ROCKET_TRAINER_ASSET, "로켓단", "mistake-character")));
     }
     copy.append(title, message);
     encounter.append(copy);
@@ -897,7 +897,6 @@ function gradeName(grade) {
     return GRADES[grade]?.name ?? "유치원";
 }
 function updateSideInfo() {
-    const records = readRecords();
     const progress = getTrainerProgress();
     const stars = progress.stars;
     const trainerName = getName() || "친구";
@@ -1156,7 +1155,7 @@ function openToday() {
     byId("todayBadge").textContent = done === 3 ? "오늘의 배지 획득!" : done + " / 3 완료";
     byId("todayBadge").classList.toggle("complete", done === 3);
     replaceWithTrainer(byId("todayPartner"), "ash.png", "지우");
-    replaceWithTrainer(byId("todayRivals"), "jessiejames-gen1.png", "로이와 로사");
+    replaceWithTrainer(byId("todayRivals"), TEAM_ROCKET_TRAINER_ASSET, "로이와 로사");
     const grid = byId("todayMissionGrid");
     grid.replaceChildren();
     modes.forEach((mode, index) => {
@@ -1782,7 +1781,7 @@ function startSelectedGame(reviewCurrentGame = false) {
     playPokemonCry(MODE_MASCOTS[state.mode], .16);
     pokemonSparkBurst(12);
     if (state.mode === "quiz")
-        startQuiz();
+        startQuiz(reviewCurrentGame ? quizReviewProblems ?? undefined : undefined);
     if (state.mode === "rain") {
         replaceWithTrainer(byId("rainTrainer"), "misty.png", "이슬이");
         startRain();
@@ -1850,6 +1849,7 @@ function keypad(onNumber, onDelete, onEnter) {
     return grid;
 }
 let quiz = null;
+let quizReviewProblems = null;
 function stopQuiz() {
     if (quiz?.timer !== null && quiz?.timer !== undefined)
         window.clearInterval(quiz.timer);
@@ -1886,8 +1886,10 @@ function showThemedGameScene(theme, title, subtitle, duration = 1300) {
     document.body.append(scene);
     window.setTimeout(() => scene.remove(), duration);
 }
-function startQuiz() {
-    quiz = { index: 0, score: 0, correct: 0, streak: 0, best: 0, input: "", locked: false, started: Date.now(), questionStarted: Date.now(), current: null, choiceMode: false, results: [], timer: null };
+function startQuiz(reviewProblems) {
+    const questions = reviewProblems?.length ? reviewProblems.slice() : Array.from({ length: 10 }, (_, index) => newProblem(difficultyForProgress(index / 9)));
+    quizReviewProblems = null;
+    quiz = { index: 0, score: 0, correct: 0, streak: 0, best: 0, input: "", locked: false, started: Date.now(), questionStarted: Date.now(), current: null, choiceMode: false, results: [], timer: null, questions, answers: [], isReview: Boolean(reviewProblems?.length) };
     replaceWithPokemon(byId("quizMascot"), 25);
     showScreen("quiz");
     showThemedGameScene("quiz", "피카츄 암산 수업", "빈 칠판에 나타나는 문제를 해결해요!", 1200);
@@ -1907,7 +1909,7 @@ function renderQuizDots() {
         return;
     const dots = byId("quizDots");
     dots.replaceChildren();
-    for (let index = 0; index < 10; index += 1) {
+    for (let index = 0; index < quiz.questions.length; index += 1) {
         const dot = document.createElement("span");
         dot.className = "quiz-dot";
         if (quiz.results[index] === "c")
@@ -1922,11 +1924,11 @@ function renderQuizDots() {
 function nextQuizQuestion() {
     if (!quiz)
         return;
-    if (quiz.index >= 10) {
+    if (quiz.index >= quiz.questions.length) {
         finishQuiz();
         return;
     }
-    quiz.current = newProblem(difficultyForProgress(quiz.index / 9));
+    quiz.current = quiz.questions[quiz.index];
     quiz.input = "";
     quiz.locked = false;
     quiz.choiceMode = Math.random() < (state.grade !== null && state.grade <= 2 ? .6 : .45);
@@ -1937,11 +1939,10 @@ function nextQuizQuestion() {
     byId("quizAnswer").className = "answer-display";
     byId("quizFeedback").textContent = "";
     byId("quizScore").textContent = String(quiz.score);
-    byId("quizCount").textContent = "문제 " + (quiz.index + 1) + "/10";
+    byId("quizCount").textContent = "문제 " + (quiz.index + 1) + "/" + quiz.questions.length;
     byId("quizStreak").textContent = quiz.streak >= 2 ? quiz.streak + "연속 정답!" : "";
     renderQuizDots();
     const controls = byId("quizControls");
-    resetChoicePenalty("quizControls");
     controls.replaceChildren();
     if (quiz.choiceMode) {
         const list = document.createElement("div");
@@ -1988,23 +1989,18 @@ function answerQuiz(value, selected) {
         return;
     const correct = value === quiz.current.answer;
     const answer = byId("quizAnswer");
-    const mistakes = selected ? choiceMistakeCount("quizControls") : 0;
-    if (!correct && selected) {
-        quiz.streak = 0;
-        renderQuizCharge();
-        const buttons = Array.from(byId("quizControls").querySelectorAll(".choice-button"));
-        const correctButton = buttons.find((button) => Number(button.textContent) === quiz?.current?.answer);
-        const retry = applyChoicePenalty("quizControls", ".choice-button", selected, correctButton, byId("quizFeedback"), "고오스가 콤보를 끊었어요. 잠깐 생각하고 한 번 더 골라요!", "두 번 틀렸어요. 정답을 확인하고 다음 문제로 이동해요.");
-        answer.classList.add("wrong");
-        answer.textContent = String(value);
-        if (retry)
-            return;
-    }
     quiz.locked = true;
+    quiz.answers.push({ problem: quiz.current, selected: value, correct });
+    const buttons = Array.from(byId("quizControls").querySelectorAll(".choice-button"));
+    buttons.forEach((button) => {
+        button.disabled = true;
+        if (Number(button.textContent) === quiz?.current?.answer)
+            button.classList.add("correct");
+    });
     if (correct) {
         const seconds = (Date.now() - quiz.questionStarted) / 1000;
         const baseScore = 100 + (seconds < 7 ? 30 : 0) + quiz.streak * 10;
-        const gained = mistakes ? Math.round(baseScore * .5) : baseScore;
+        const gained = baseScore;
         quiz.score += gained;
         quiz.correct += 1;
         quiz.streak += 1;
@@ -2018,7 +2014,7 @@ function answerQuiz(value, selected) {
         quiz.results[quiz.index] = "c";
         answer.classList.add("correct");
         answer.textContent = String(value);
-        byId("quizFeedback").textContent = mistakes ? "재도전 성공! 절반 점수 +" + gained : "정답이에요! +" + gained;
+        byId("quizFeedback").textContent = "정답이에요! +" + gained;
         if (selected)
             selected.classList.add("correct");
         correctSound();
@@ -2031,19 +2027,15 @@ function answerQuiz(value, selected) {
         byId("quizFeedback").textContent = "정답은 " + quiz.current.answer + "예요.";
         if (selected)
             selected.classList.add("wrong");
-        if (!selected)
-            wrongSound();
+        wrongSound();
     }
     renderQuizDots();
-    const nextDelay = !correct && selected && mistakes > 0
-        ? FINAL_MISTAKE_HOLD_MS + MISTAKE_ENCOUNTER_EXIT_MS
-        : (correct ? 850 : 1350);
     window.setTimeout(() => {
         if (!quiz)
             return;
         quiz.index += 1;
         nextQuizQuestion();
-    }, nextDelay);
+    }, correct ? 850 : 1500);
 }
 function finishQuiz() {
     if (!quiz || state.grade === null)
@@ -2051,11 +2043,33 @@ function finishQuiz() {
     const game = quiz;
     stopQuiz();
     quiz = null;
-    const accuracy = Math.round(game.correct / 10 * 100);
+    const total = game.questions.length;
+    const accuracy = Math.round(game.correct / total * 100);
     const stars = accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : accuracy >= 40 ? 1 : 0;
-    saveRecord({ name: getName() || "친구", mode: "quiz", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.correct + "/10 · " + accuracy + "%", timestamp: Date.now() });
+    saveRecord({ name: getName() || "친구", mode: "quiz", grade: state.grade, diff: state.diff, score: game.score, stars, detail: game.correct + "/" + total + " · " + accuracy + "%", timestamp: Date.now() });
     showThemedGameScene("quiz", "오늘의 수업 완료!", accuracy + "%의 문제를 맞혔어요.", 1800);
-    showResult(stars, "피카츄 암산퀴즈 완료", accuracy + "%를 맞혔어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/10", "정답"], [String(game.best), "최고 연속"]]);
+    showResult(stars, game.isReview ? "피카츄 오답 복습 완료" : "피카츄 암산퀴즈 완료", accuracy + "%를 맞혔어요.", [[String(game.score), "점수"], [accuracy + "%", "정답률"], [game.correct + "/" + total, "정답"], [String(game.best), "최고 연속"]]);
+    renderQuizResultReview(game);
+}
+function renderQuizResultReview(game) {
+    const panel = byId("knowledgeResultReview");
+    const missed = game.answers.filter((answer) => !answer.correct);
+    quizReviewProblems = missed.length ? missed.map((answer) => answer.problem) : null;
+    panel.replaceChildren();
+    panel.classList.remove("hidden-panel");
+    appendResultReviewHeading(panel, "암산 결과표", missed.length ? "처음 고른 답과 정답을 확인해요." : "모든 문제를 정확하게 해결했어요!");
+    appendResultMetricGrid(panel, [[String(game.correct), "정답"], [String(missed.length), "다시 볼 문제"]]);
+    if (missed.length) {
+        const details = createResultReviewDetails("다시 볼 문제 " + missed.length + "개");
+        const list = details.querySelector("ol");
+        missed.forEach(({ problem, selected }) => {
+            const item = document.createElement("li");
+            item.innerHTML = `<strong>${problem.display} = ?</strong><p class="knowledge-review-selected">내 답: ${selected}</p><p class="knowledge-review-correct">정답: ${problem.answer}</p>`;
+            list.append(item);
+        });
+        panel.append(details);
+    }
+    byId("resultRetry").textContent = missed.length ? "틀린 문제 다시 풀기" : "새로운 10문제";
 }
 let rain = null;
 const RAIN_CONFIG = {
@@ -2354,7 +2368,6 @@ function stopMole() {
     });
 }
 function startMole() {
-    const config = MOLE_CONFIG[state.diff];
     mole = { running: true, score: 0, combo: 0, best: 0, hits: 0, bonusHits: 0, time: 60, target: newProblem("easy"), holes: [], spawnTimer: null, countdown: null, started: performance.now() };
     const grid = byId("moleGrid");
     const celebration = byId("moleCelebration");
@@ -2748,7 +2761,6 @@ function finishMemory(timedOut = false, failed = false) {
     if (!memory?.running || state.grade === null)
         return;
     const game = memory;
-    const seconds = Math.floor((performance.now() - game.started) / 1000);
     const ratio = game.totalMatched / Math.max(1, game.moves);
     const completion = game.totalMatched / MEMORY_TOTAL_PAIRS;
     const stars = failed ? (completion >= .5 ? 1 : 0) : timedOut ? (completion >= .75 ? 2 : completion >= .4 ? 1 : 0) : ratio >= .7 ? 3 : ratio >= .5 ? 2 : ratio >= .34 ? 1 : 0;
@@ -4291,7 +4303,7 @@ function useSymmetryHint() {
         byId("symmetryStatus").textContent = "파치리스가 정답 칸 하나에 전기를 연결했어요!";
     }
     symmetry.score = Math.max(0, symmetry.score - 50);
-    pokemonSparkBurst(417);
+    pokemonSparkBurst(6);
     renderSymmetry();
 }
 function checkSymmetry() {
@@ -4304,7 +4316,7 @@ function checkSymmetry() {
         byId("symmetryStatus").textContent = "대칭 회로 연결 성공! 파치리스의 에너지가 충전됐어요.";
         byId("screen-symmetry").classList.add("circuit-complete");
         correctSound();
-        pokemonSparkBurst(417);
+        pokemonSparkBurst(10);
         if (symmetry.round === 5)
             playPokemonCry(417);
         window.setTimeout(setupSymmetryRound, 650);
@@ -4447,7 +4459,7 @@ function chooseCoordinatePacket(id, button) {
         button.classList.add("recovered");
         button.disabled = true;
         correctSound();
-        pokemonSparkBurst(137);
+        pokemonSparkBurst(10);
         byId("coordinateStatus").textContent = "오류 패킷 복구 성공! 남은 데이터를 분석해요.";
         if (coordinate.errorsRemaining <= 0) {
             coordinate.transitioning = true;
@@ -4855,7 +4867,7 @@ function nextSafety() {
     const indexed = shuffle(question.choices.map((label, index) => ({ label, correct: index === question.answer })));
     const choices = byId("safetyChoices");
     choices.replaceChildren();
-    indexed.forEach((item, index) => { const button = document.createElement("button"); button.type = "button"; button.className = "safety-choice"; button.textContent = item.label; button.addEventListener("click", () => answerSafety(item.correct, button, indexed)); choices.append(button); });
+    indexed.forEach((item) => { const button = document.createElement("button"); button.type = "button"; button.className = "safety-choice"; button.textContent = item.label; button.addEventListener("click", () => answerSafety(item.correct, button, indexed)); choices.append(button); });
 }
 function safetyCategoryIcon(category) {
     if (category.includes("교통") || category.includes("자전거"))
@@ -5056,7 +5068,6 @@ const KNOWLEDGE_QUESTIONS = [
     { category: "생활", prompt: "새 앱이 사진·위치·연락처 권한을 모두 요구해요.", choices: ["기능에 꼭 필요한 권한인지 확인하고 최소한만 허용하기", "모든 권한을 무조건 허용하기", "비밀번호도 함께 보내기", "사용하지 않아도 계속 위치를 공유하기"], answer: 0, explanation: "앱의 기능과 관계없는 권한은 거부하고 개인정보 접근 권한을 주기적으로 확인해요.", minGrade: 5, maxGrade: 6, tier: 2 }
 ];
 const KNOWLEDGE_EXTRA_SEEDS = [
-    // 1~2학년: 과학
     ["과학", "자석에 붙는 물건은 무엇일까요?", "철로 만든 클립", "나무젓가락", "고무지우개", "종이컵", "철로 된 물체는 자석에 잘 붙어요.", 0, 2, 1],
     ["과학", "낮에 주변을 밝게 비추는 것은 무엇일까요?", "태양", "달", "별똥별", "가로등만", "태양은 낮 동안 지구에 빛과 열을 보내요.", 0, 2, 1],
     ["과학", "달이 밤에 밝게 보이는 까닭은?", "태양빛을 반사해서", "스스로 불타서", "전구가 들어 있어서", "별빛을 먹어서", "달은 태양빛을 받아 반사해 밝게 보여요.", 0, 2, 2],
@@ -5067,7 +5078,6 @@ const KNOWLEDGE_EXTRA_SEEDS = [
     ["과학", "그림자가 생기려면 필요한 것은?", "빛과 빛을 막는 물체", "소리와 냄새", "물과 설탕", "바람과 모래", "물체가 빛을 막으면 반대쪽에 그림자가 생겨요.", 0, 2, 2],
     ["과학", "문을 앞으로 밀어 여는 것은 어떤 힘일까요?", "미는 힘", "당기는 힘", "자기력만", "부력", "물체를 멀어지게 움직일 때 미는 힘을 사용해요.", 0, 2, 1],
     ["과학", "추운 겨울에 알맞은 옷은 무엇일까요?", "두꺼운 외투", "얇은 수영복", "민소매 한 장", "물에 젖은 옷", "두꺼운 옷은 몸의 열이 빠져나가는 것을 줄여요.", 0, 2, 1],
-    // 1~2학년: 사회
     ["사회", "우리 지역의 여러 일을 맡아보는 곳은?", "시청이나 군청", "영화관", "놀이공원", "빵집", "시청과 군청은 주민 생활에 필요한 행정 업무를 해요.", 0, 2, 2],
     ["사회", "편지와 소포를 보내고 받는 곳은?", "우체국", "소방서", "박물관", "체육관", "우체국은 우편물과 소포를 전달해요.", 0, 2, 1],
     ["사회", "아픈 사람을 진료하고 치료하는 곳은?", "병원", "도서관", "시장", "공원", "병원에서는 의료진이 환자를 진료하고 치료해요.", 0, 2, 1],
@@ -5078,7 +5088,6 @@ const KNOWLEDGE_EXTRA_SEEDS = [
     ["사회", "공원 벤치 같은 공공 물건은 어떻게 써야 할까요?", "깨끗하고 조심히 함께 써요", "낙서해요", "혼자 가져가요", "일부러 망가뜨려요", "공공시설은 모두의 것이므로 아껴 써야 해요.", 0, 2, 1],
     ["사회", "가족이 집안일을 나누어 하면 좋은 점은?", "서로 돕고 함께 책임질 수 있어요", "한 명만 계속 힘들어요", "집안일이 늘어나요", "대화를 못 해요", "가족 구성원이 역할을 나누면 서로 배려하고 협력할 수 있어요.", 0, 2, 2],
     ["사회", "거리를 깨끗하게 관리하는 일을 하는 분은?", "환경미화원", "우주비행사", "화가", "마술사", "환경미화원은 거리의 쓰레기를 수거하고 환경을 깨끗하게 지켜요.", 0, 2, 1],
-    // 1~2학년: 역사
     ["역사", "일어난 일을 가장 먼저부터 차례로 나타내는 것은?", "시간의 순서", "자리의 크기", "색깔의 순서", "키의 순서", "역사는 사건이 일어난 앞뒤 순서를 살피는 것이 중요해요.", 0, 2, 1],
     ["역사", "옛날 물건을 안전하게 보관하고 보여 주는 곳은?", "박물관", "동물원", "수영장", "정류장", "박물관은 역사 자료와 유물을 보존하고 전시해요.", 0, 2, 1],
     ["역사", "옛사람이 남긴 그릇이나 도구를 무엇이라 할까요?", "유물", "날씨", "약속", "동화", "유물은 과거 사람들이 만들고 사용한 물건이에요.", 0, 2, 2],
@@ -5089,7 +5098,6 @@ const KNOWLEDGE_EXTRA_SEEDS = [
     ["역사", "광복절은 무엇을 기념하는 날일까요?", "나라를 되찾은 날", "한글을 만든 날", "새해 첫날", "어린이날", "8월 15일 광복절은 일제의 지배에서 벗어난 것을 기념해요.", 0, 2, 2],
     ["역사", "우리나라를 나타내는 국기의 이름은?", "태극기", "무궁화", "애국가", "한글", "태극기는 우리나라의 국기이며 역사 속에서 나라를 나타내 왔어요.", 0, 2, 1],
     ["역사", "세종대왕이 만든 새 글자의 처음 이름은?", "훈민정음", "삼국사기", "팔만대장경", "동의보감", "훈민정음은 백성을 가르치는 바른 소리라는 뜻이에요.", 0, 2, 2],
-    // 1~2학년: 생활
     ["생활", "손을 깨끗이 씻는 가장 좋은 방법은?", "비누로 손바닥과 손가락 사이까지 씻기", "물에 손끝만 대기", "옷에 닦기", "흙으로 문지르기", "비누로 손의 여러 부분을 꼼꼼히 씻으면 오염물을 줄일 수 있어요.", 0, 2, 1],
     ["생활", "이를 건강하게 지키는 습관은?", "식사 뒤 꼼꼼히 양치하기", "사탕을 먹고 바로 자기", "칫솔을 함께 쓰기", "이를 닦지 않기", "올바른 양치는 충치를 일으키는 음식 찌꺼기와 세균막을 없애요.", 0, 2, 1],
     ["생활", "건강한 식사 방법은 무엇일까요?", "여러 종류의 음식을 골고루 먹기", "과자만 먹기", "채소는 모두 빼기", "한 가지 음식만 먹기", "다양한 식품을 골고루 먹어야 필요한 영양소를 얻을 수 있어요.", 0, 2, 1],
@@ -5100,7 +5108,6 @@ const KNOWLEDGE_EXTRA_SEEDS = [
     ["생활", "친구에게 실수했을 때 바른 행동은?", "잘못을 인정하고 진심으로 사과하기", "모른 척하기", "친구 탓만 하기", "소문내기", "자신의 행동을 설명하고 사과한 뒤 고치려는 태도가 필요해요.", 0, 2, 2],
     ["생활", "온라인에서 이름과 주소를 물으면 어떻게 할까요?", "알려주지 않고 보호자에게 묻기", "모두 공개하기", "사진까지 보내기", "비밀번호도 알려주기", "개인정보는 믿을 수 있는 보호자의 확인 없이 공개하면 안 돼요.", 0, 2, 1],
     ["생활", "위험한 일을 당해 경찰의 도움이 필요할 때 전화번호는?", "112", "119", "114", "120", "범죄 신고와 긴급한 경찰 도움은 112로 요청해요.", 0, 2, 1],
-    // 3~4학년: 과학
     ["과학", "물이 얼어 얼음이 되는 상태 변화는?", "응고", "융해", "증발", "응결", "액체가 고체로 변하는 현상을 응고라고 해요.", 3, 4, 1],
     ["과학", "젖은 빨래가 마르는 까닭은?", "물이 증발해서", "물이 얼어서", "천이 물을 먹어서", "바람이 색을 지워서", "빨래의 물이 수증기로 변해 공기 중으로 이동해요.", 3, 4, 1],
     ["과학", "소리의 높낮이를 바꾸는 것과 관계 깊은 것은?", "물체의 진동 빠르기", "물체의 색", "방의 넓이만", "냄새의 세기", "빠르게 진동할수록 일반적으로 높은 소리가 나요.", 3, 4, 2],
@@ -5111,7 +5118,6 @@ const KNOWLEDGE_EXTRA_SEEDS = [
     ["과학", "달 표면에 둥근 구덩이가 많은 까닭은?", "운석이 충돌해서", "비가 많이 내려서", "나무뿌리가 파서", "바닷물이 흘러서", "대기가 거의 없는 달에는 충돌 흔적인 크레이터가 오래 남아요.", 3, 4, 2],
     ["과학", "풍선을 누르면 모양이 변하는 까닭은?", "공기가 압력을 전달해서", "공기가 사라져서", "고무가 물이 돼서", "빛이 밀어서", "갇힌 공기는 힘을 받으면 압력을 여러 방향으로 전달해요.", 3, 4, 2],
     ["과학", "모래와 물을 분리할 때 알맞은 방법은?", "거름 장치로 거르기", "자석만 사용하기", "모두 끓여 태우기", "설탕 넣기", "물에 녹지 않는 모래는 거름종이로 걸러낼 수 있어요.", 3, 4, 2],
-    // 3~4학년: 사회
     ["사회", "우리나라의 가장 큰 행정 구역 단위에 해당하는 것은?", "특별시·광역시·도", "반", "모둠", "번지", "우리나라는 특별시, 광역시, 특별자치시, 도 등으로 나뉘어요.", 3, 4, 1],
     ["사회", "해가 뜨는 쪽을 나타내는 방위는?", "동쪽", "서쪽", "남쪽", "북쪽", "해는 대체로 동쪽에서 떠서 서쪽으로 져요.", 3, 4, 1],
     ["사회", "지도에서 실제 거리를 줄인 정도는?", "축척", "범례", "등고선", "제목", "축척을 이용하면 지도 위 거리와 실제 거리의 관계를 알 수 있어요.", 3, 4, 2],
@@ -5122,7 +5128,6 @@ const KNOWLEDGE_EXTRA_SEEDS = [
     ["사회", "사람이 만든 다리와 도로는 어떤 환경일까요?", "인문 환경", "자연 환경", "우주 환경", "기후만", "건물과 도로처럼 사람이 만든 환경을 인문 환경이라고 해요.", 3, 4, 1],
     ["사회", "비밀 투표를 하는 까닭은?", "다른 압력 없이 뜻을 표현하려고", "결과를 숨기려고", "한 명이 두 번 뽑으려고", "후보를 없애려고", "비밀 투표는 유권자가 자유롭게 선택하도록 보호해요.", 3, 4, 2],
     ["사회", "권리와 함께 책임도 필요한 까닭은?", "서로의 권리를 존중해야 해서", "나만 편하면 되어서", "규칙을 없애려고", "의견을 막으려고", "자신의 권리를 누릴 때 다른 사람의 권리도 존중해야 해요.", 3, 4, 2],
-    // 3~4학년: 역사
     ["역사", "고인돌이 많이 만들어진 시대는?", "청동기 시대", "구석기 시대", "조선 시대", "현대", "고인돌은 청동기 시대의 대표적인 무덤이에요.", 3, 4, 1],
     ["역사", "고구려·백제·신라를 함께 부르는 말은?", "삼국", "후삼국", "남북국", "열국", "세 나라가 경쟁하며 성장한 시기를 삼국 시대라고 해요.", 3, 4, 1],
     ["역사", "고구려 고분 벽화로 알 수 있는 것은?", "고구려 사람들의 생활과 믿음", "미래의 생활", "현대 교통만", "외국 날씨만", "무덤 벽화에는 당시의 옷, 놀이, 종교 등이 표현되어 있어요.", 3, 4, 2],
@@ -5133,7 +5138,6 @@ const KNOWLEDGE_EXTRA_SEEDS = [
     ["역사", "거북선을 활용해 바다를 지킨 인물은?", "이순신", "세종", "정약용", "김정호", "이순신은 조선 수군을 이끌어 일본군의 침략에 맞섰어요.", 3, 4, 1],
     ["역사", "조선 후기 현실 문제 해결을 강조한 학문은?", "실학", "주술", "신화", "점성술", "실학자들은 농업과 상공업 등 실제 생활의 개선을 연구했어요.", 3, 4, 2],
     ["역사", "문화유산의 만든 시기와 쓰임을 조사하는 까닭은?", "역사적 의미를 바르게 이해하려고", "가격만 정하려고", "새것으로 바꾸려고", "모두 버리려고", "배경과 용도를 알아야 문화유산이 전하는 역사를 이해할 수 있어요.", 3, 4, 2],
-    // 3~4학년: 생활
     ["생활", "온라인 댓글을 쓸 때 바른 태도는?", "상대방을 존중하는 말 쓰기", "욕설 쓰기", "확인 없이 소문 퍼뜨리기", "개인정보 공개하기", "온라인에서도 실제 사람과 대화하듯 예의를 지켜야 해요.", 3, 4, 1],
     ["생활", "친구가 만든 그림을 과제에 쓰려면?", "허락받고 출처 밝히기", "이름 지우기", "내 작품이라 하기", "몰래 판매하기", "창작물은 만든 사람의 권리를 존중해 이용해야 해요.", 3, 4, 2],
     ["생활", "계정마다 다른 비밀번호를 쓰는 까닭은?", "한 계정 유출이 다른 계정으로 번지는 것을 막으려고", "외우기 어렵게 하려고", "로그인을 못 하게 하려고", "친구와 공유하려고", "비밀번호 재사용을 피하면 연쇄적인 계정 피해를 줄일 수 있어요.", 3, 4, 2],
@@ -5144,7 +5148,6 @@ const KNOWLEDGE_EXTRA_SEEDS = [
     ["생활", "학교폭력을 알게 되었을 때 할 일은?", "믿을 만한 어른에게 알리고 도움받기", "숨기기", "함께 놀리기", "영상 퍼뜨리기", "혼자 견디지 말고 보호자와 선생님 등에게 도움을 요청해야 해요.", 3, 4, 1],
     ["생활", "사용하지 않는 교실의 전등은 어떻게 할까요?", "끄고 나와 전기를 아껴요", "계속 켜 둬요", "모두 더 켜요", "전구를 만져요", "필요 없는 전기를 끄면 에너지와 자원을 절약할 수 있어요.", 3, 4, 1],
     ["생활", "자전거 방향을 바꾸기 전 해야 할 일은?", "주변을 확인하고 손 신호로 알려요", "눈을 감고 돌아요", "갑자기 꺾어요", "이어폰 소리를 높여요", "주변 차량과 보행자에게 움직임을 미리 알리면 사고를 줄여요.", 3, 4, 2],
-    // 5~6학년: 과학
     ["과학", "광합성에 식물이 공기에서 사용하는 기체는?", "이산화탄소", "질소만", "수소", "헬륨", "식물은 이산화탄소와 물을 이용해 양분을 만들어요.", 5, 6, 1],
     ["과학", "사람이 호흡으로 받아들이는 기체는?", "산소", "이산화탄소만", "메테인", "수소", "산소는 세포가 양분에서 에너지를 얻는 데 필요해요.", 5, 6, 1],
     ["과학", "물체를 지구 중심 쪽으로 끌어당기는 힘은?", "중력", "부력", "탄성력", "마찰력만", "지구의 중력 때문에 물체가 아래로 떨어지고 땅에 머물러요.", 5, 6, 1],
@@ -5155,7 +5158,6 @@ const KNOWLEDGE_EXTRA_SEEDS = [
     ["과학", "생태계에서 곰팡이와 세균의 중요한 역할은?", "죽은 생물을 분해해 물질을 돌려보내요", "햇빛을 만들어요", "중력을 없애요", "비를 멈춰요", "분해자는 유기물을 작은 물질로 분해해 생태계 순환을 도와요.", 5, 6, 2],
     ["과학", "같은 양의 물에 설탕을 더 많이 녹이면?", "용액의 농도가 높아져요", "농도가 낮아져요", "물이 고체가 돼요", "질량이 사라져요", "용매 양이 같을 때 용질이 많아지면 농도가 높아져요.", 5, 6, 1],
     ["과학", "온실가스가 지나치게 늘면 생길 수 있는 현상은?", "지구 평균 기온 상승", "중력 소멸", "낮과 밤 소멸", "달의 공전 정지", "온실가스 증가는 지구가 내보내는 열을 더 많이 붙잡아요.", 5, 6, 2],
-    // 5~6학년: 사회
     ["사회", "국가 권력을 여러 기관에 나누는 원리는?", "권력 분립", "신분제", "세습제", "봉건제", "권력 분립은 기관들이 서로 견제해 권력 남용을 막아요.", 5, 6, 1],
     ["사회", "민주 선거의 기본 원칙에 해당하는 것은?", "보통·평등·직접·비밀 선거", "공개 강제 투표", "신분별 차등 투표", "대리인만 투표", "민주 선거는 모든 유권자의 자유롭고 동등한 선택을 보장해야 해요.", 5, 6, 2],
     ["사회", "공급이 줄고 수요가 그대로라면 가격은 일반적으로?", "오르는 경향이 있어요", "반드시 0원이 돼요", "항상 절반이 돼요", "변하지 않아요", "원하는 양에 비해 물건이 부족해지면 가격이 오르는 경향이 있어요.", 5, 6, 2],
@@ -5166,7 +5168,6 @@ const KNOWLEDGE_EXTRA_SEEDS = [
     ["사회", "나라들이 서로 무역하는 주된 까닭은?", "필요한 자원과 상품을 효율적으로 얻으려고", "모든 생산을 멈추려고", "화폐를 없애려고", "교류를 막으려고", "지역마다 자원과 기술이 달라 교환하면 선택의 폭을 넓힐 수 있어요.", 5, 6, 1],
     ["사회", "적도 부근에 열대 기후가 나타나는 주된 까닭은?", "연중 태양 에너지를 많이 받아서", "항상 겨울이어서", "달과 가까워서", "바다가 없어서", "적도 부근은 햇빛을 비교적 수직으로 받아 기온이 높아요.", 5, 6, 2],
     ["사회", "지속 가능한 발전이 뜻하는 것은?", "미래 세대의 필요도 해치지 않는 발전", "자원을 한꺼번에 쓰는 발전", "환경을 고려하지 않는 성장", "현재만 생각하는 소비", "환경·사회·경제를 함께 고려해 미래에도 이어질 수 있어야 해요.", 5, 6, 2],
-    // 5~6학년: 역사
     ["역사", "고조선의 법 조항으로 알 수 있는 것은?", "생명과 재산을 중요하게 여겼어요", "바다 무역만 했어요", "한글을 사용했어요", "과거제를 실시했어요", "전해지는 8조법에는 생명과 재산을 보호하려는 내용이 있어요.", 5, 6, 2],
     ["역사", "고구려 영토를 크게 넓힌 왕은?", "광개토대왕", "의자왕", "문무왕", "공민왕", "광개토대왕은 적극적인 정복 활동으로 고구려 영토를 넓혔어요.", 5, 6, 1],
     ["역사", "신라의 골품제가 영향을 준 것은?", "관직 진출과 생활 범위", "날씨 변화", "농작물 종류만", "문자 발명", "골품에 따라 오를 수 있는 관직과 생활 모습에 제한이 있었어요.", 5, 6, 2],
@@ -5177,7 +5178,6 @@ const KNOWLEDGE_EXTRA_SEEDS = [
     ["역사", "임진왜란 때 조선 수군의 승리가 중요했던 까닭은?", "일본군의 보급로를 막는 데 도움을 줘서", "농사를 모두 멈춰서", "수도를 옮겨서", "과거제를 시작해서", "바닷길을 지키며 일본군의 병력과 물자 운송을 어렵게 했어요.", 5, 6, 2],
     ["역사", "동학 농민 운동에서 농민들이 요구한 것은?", "탐관오리 처벌과 사회 개혁", "일제 식민 통치 강화", "신분 차별 확대", "외세의 자유로운 침략", "농민들은 부패한 정치와 외세 침략에 맞서 개혁을 요구했어요.", 5, 6, 2],
     ["역사", "1919년에 대한민국 임시정부가 세워진 곳은?", "중국 상하이", "서울", "평양", "도쿄", "3·1 운동 뒤 상하이에 통합된 대한민국 임시정부가 수립되었어요.", 5, 6, 1],
-    // 5~6학년: 생활
     ["생활", "온라인 정보의 신뢰도를 확인하는 핵심 방법은?", "작성자·근거·날짜를 여러 출처와 비교하기", "조회 수만 보기", "제목만 믿기", "친구 말만 따르기", "출처와 증거를 교차 확인해야 잘못된 정보를 가려낼 수 있어요.", 5, 6, 1],
     ["생활", "기관을 사칭해 송금을 재촉하는 연락을 받았어요.", "전화를 끊고 공식 번호로 직접 확인하기", "상대가 준 계좌로 즉시 보내기", "인증번호 알려주기", "앱 설치하기", "사칭 사기는 판단할 시간을 주지 않으므로 별도 공식 경로로 확인해요.", 5, 6, 2],
     ["생활", "사용하지 않는 온라인 계정을 안전하게 관리하려면?", "개인정보를 지우고 공식 절차로 탈퇴하기", "그대로 방치하기", "비밀번호 공개하기", "친구에게 넘기기", "오래된 계정도 정보 유출 경로가 될 수 있어 정리하는 것이 좋아요.", 5, 6, 2],
@@ -5307,7 +5307,7 @@ function answerKnowledge(index, selected) {
         byId("knowledgeExplanation").className = "knowledge-explanation correct";
         byId("knowledgeExplanation").textContent = "정답! " + question.explanation;
         correctSound();
-        pokemonSparkBurst(151);
+        pokemonSparkBurst(10);
     }
     else {
         knowledge.streak = 0;
@@ -6485,9 +6485,10 @@ function buildBackground() {
     });
 }
 function pokemonSparkBurst(count) {
-    count = Math.max(0, Math.min(48, Math.floor(count)));
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
         return;
+    const limit = window.matchMedia("(max-width: 900px), (pointer: coarse)").matches ? 12 : 32;
+    count = Math.max(0, Math.min(limit - document.querySelectorAll(".poke-spark").length, Math.floor(count)));
     for (let index = 0; index < count; index += 1) {
         const spark = document.createElement("span");
         spark.className = "poke-spark";
@@ -6655,11 +6656,12 @@ function bindEvents() {
                 buildModes();
             }
             if (action === "retry") {
-                const reviewAvailable = state.mode === "space" ? Boolean(spaceReviewQuestions?.length)
-                    : state.mode === "knowledge" ? Boolean(knowledgeReviewQuestions?.length)
-                        : state.mode === "history" ? Boolean(historyReviewEvents?.length)
-                            : state.mode === "safety" ? Boolean(safetyReviewQuestions?.length)
-                                : false;
+                const reviewAvailable = state.mode === "quiz" ? Boolean(quizReviewProblems?.length)
+                    : state.mode === "space" ? Boolean(spaceReviewQuestions?.length)
+                        : state.mode === "knowledge" ? Boolean(knowledgeReviewQuestions?.length)
+                            : state.mode === "history" ? Boolean(historyReviewEvents?.length)
+                                : state.mode === "safety" ? Boolean(safetyReviewQuestions?.length)
+                                    : false;
                 startSelectedGame(reviewAvailable);
             }
         });
@@ -6769,6 +6771,8 @@ decorateGameScreens();
 bindEvents();
 restoreLastPlay();
 startIntro();
+window.addEventListener("pagehide", () => { cleanupGame(); stopMusic(); cryAudio?.pause(); if (audioContext?.state === "running")
+    void audioContext.suspend(); });
 const installCoordinateRuleDock = () => {
     let updateQueued = false;
     const syncRuleDock = () => {
@@ -6827,7 +6831,6 @@ if (document.readyState === "loading") {
 else {
     installCoordinateRuleDock();
 }
-/* codex:pikachu-quiz-polish */
 const installCodexPikachuQuizPolish = () => {
     let scanQueued = false;
     const quizScreen = document.querySelector("#screen-quiz");
