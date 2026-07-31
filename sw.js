@@ -1,4 +1,4 @@
-const CACHE_NAME = "pokemon-learning-adventure-v1.0.56";
+const CACHE_NAME = "pokemon-learning-adventure-v1.0.60";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,11 +8,13 @@ const APP_SHELL = [
   "./voltorb-enhancements.js",
   "./trainer-unlock-enhancements.css",
   "./trainer-unlock-enhancements.js",
+  "./mobile-frame-stability.css",
   "./config/allowed-trainers.js",
   "./site.webmanifest",
   "./assets/pokeball-favicon.svg",
   "./assets/pokeball-icon-192.png",
-  "./assets/pokeball-icon-512.png"
+  "./assets/pokeball-icon-512.png",
+  "./assets/team-rocket-jessie-james-modern.png"
 ];
 
 self.addEventListener("install",(event) => {

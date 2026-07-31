@@ -1,0 +1,54 @@
+/* Keep the complete app pinned to the currently visible mobile viewport. */
+@media (max-width: 900px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+    background: linear-gradient(180deg, #75c9f6, #e3f6ff 58%, #d8ecc8) !important;
+    background-attachment: scroll !important;
+  }
+
+  #app.app-shell {
+    width: 100vw !important;
+    width: 100dvw !important;
+    max-width: 100vw !important;
+    max-width: 100dvw !important;
+    min-width: 0 !important;
+    margin-inline: 0 !important;
+    transform: none !important;
+    transform-origin: left top !important;
+    translate: none !important;
+    scale: none !important;
+  }
+
+  #app.app-shell > .sidebar,
+  #app.app-shell > .content {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  #app.app-shell > .sidebar {
+    background: linear-gradient(180deg, #a91f2d, #861827 66%, #351632) !important;
+  }
+
+  #app.app-shell *,
+  body > :is(.mistake-encounter, .themed-game-scene, .level-up-overlay, .pokemon-discovery-overlay) {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .bg-deco,
+  .battle-decoration {
+    display: none !important;
+  }
+
+  :is(.side-trainer, .result-mascot, .knowledge-partner img, .memory-ditto, .intro-mascot, .intro-friend) {
+    animation: none !important;
+  }
+
+  :is(.level-up-spark, .pokemon-discovery-confetti, .pokemon-discovery-rays, .pokemon-discovery-card img) {
+    animation-iteration-count: 1 !important;
+  }
+}

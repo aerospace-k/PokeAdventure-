@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#72caff">
   <title>포켓몬 배움 탐험대</title>
@@ -16,8 +16,9 @@
   <meta name="application-name" content="포켓몬 배움 탐험대">
   <meta name="app-version" content="1.0">
   <meta name="theme-color" content="#78c9f3">
-  <link rel="stylesheet" href="./voltorb-enhancements.css?v=1.0.7">
+  <link rel="stylesheet" href="./voltorb-enhancements.css?v=1.0.8">
   <link rel="stylesheet" href="./trainer-unlock-enhancements.css?v=1.0.0">
+  <link rel="stylesheet" href="./mobile-frame-stability.css?v=1.1.0">
 </head>
 <body>
   <div id="bgDeco" class="bg-deco" aria-hidden="true"></div>
@@ -36,7 +37,7 @@
         </div>
         <div class="intro-rocket-scene">
           <span class="intro-rocket-spotlight"></span>
-          <img class="intro-rocket-trainers" src="https://play.pokemonshowdown.com/sprites/trainers/jessiejames-gen1.png" alt="">
+          <img class="intro-rocket-trainers" src="./assets/team-rocket-jessie-james-modern.png" alt="">
           <img class="intro-rocket-pokemon intro-rocket-meowth" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/52.png" alt="">
           <img class="intro-rocket-pokemon intro-rocket-wobbuffet" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/202.png" alt="">
           <img class="intro-rocket-pokemon intro-rocket-gengar" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/94.png" alt="">
@@ -585,7 +586,7 @@
 
   <noscript>이 게임은 JavaScript를 켜야 실행할 수 있습니다.</noscript>
   <script src="./config/allowed-trainers.js"></script>
-  <script defer src="./dist/main.js?v=1.0.20260730.14"></script>
+  <script defer src="./dist/main.js?v=1.0.20260731.03"></script>
   <script>
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
       window.addEventListener("load", function () {
@@ -611,7 +612,7 @@
       });
     }
   </script>
-  <script src="./voltorb-enhancements.js?v=1.0.7"></script>
-  <script src="./trainer-unlock-enhancements.js?v=1.0.0"></script>
+  <script src="./voltorb-enhancements.js?v=1.0.8"></script>
+  <script src="./trainer-unlock-enhancements.js?v=1.0.1"></script>
 </body>
 </html>

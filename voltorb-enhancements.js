@@ -21,15 +21,7 @@
   let combo = 0;
   const storedBestCombo = Number(safeGet(BEST_COMBO_KEY) || 0);
   let bestCombo = Number.isFinite(storedBestCombo) && storedBestCombo >= 0 ? Math.floor(storedBestCombo) : 0;
-  let openCount = 0;
-  let markedCount = 0;
   let refreshTimer = 0;
-  const preparedCells = new WeakSet();
-  const locallyMarked = new WeakSet();
-  const pressTimers = new WeakMap();
-  const suppressClickUntil = new WeakMap();
-
-  const compactText = (element) => (element?.textContent || "").replace(/\s+/g, " ").trim();
 
   function findGameRoot() {
     const root = document.getElementById("screen-mine");
@@ -58,9 +50,12 @@
     toast.innerHTML = `<span class="voltorb-feedback-icon" aria-hidden="true">${kind === "success" ? "⚡" : kind === "danger" ? "!" : "◎"}</span><strong>${message}</strong>`;
     currentRoot.appendChild(toast);
 
-    if (anchor) {
+    const canAnchor = anchor && window.matchMedia("(min-width: 681px) and (pointer: fine)").matches;
+    if (canAnchor) {
       const rect = anchor.getBoundingClientRect();
-      toast.style.setProperty("--voltorb-toast-x", `${Math.min(window.innerWidth - 24, Math.max(24, rect.left + rect.width / 2))}px`);
+      const toastWidth = Math.min(toast.offsetWidth || 280, window.innerWidth - 28);
+      const edge = toastWidth / 2 + 14;
+      toast.style.setProperty("--voltorb-toast-x", `${Math.min(window.innerWidth - edge, Math.max(edge, rect.left + rect.width / 2))}px`);
       toast.style.setProperty("--voltorb-toast-y", `${Math.max(90, rect.top - 12)}px`);
       toast.classList.add("is-anchored");
     }
@@ -75,9 +70,15 @@
   function updateHud() {
     const hud = currentRoot?.querySelector(".voltorb-enhancement-hud");
     if (!hud) return;
-    hud.querySelector("[data-voltorb-combo]").textContent = String(combo);
-    hud.querySelector("[data-voltorb-best]").textContent = String(bestCombo);
-    hud.querySelector("[data-voltorb-marked]").textContent = String(markedCount);
+    const values = [
+      ["[data-voltorb-combo]", String(combo)],
+      ["[data-voltorb-best]", String(bestCombo)],
+      ["[data-voltorb-marked]", String(currentBoard?.querySelectorAll(".mine-cell.flagged").length || 0)]
+    ];
+    values.forEach(([selector, value]) => {
+      const output = hud.querySelector(selector);
+      if (output && output.textContent !== value) output.textContent = value;
+    });
     hud.classList.toggle("has-combo", combo >= 3);
   }
 
@@ -93,7 +94,8 @@
         <span class="voltorb-hud-chip">표식 <b data-voltorb-marked>0</b></span>
         <span class="voltorb-touch-guide">탭: 열기 · 길게: 전기 표식</span>
       `;
-      board.parentElement?.insertBefore(hud, board);
+      const frame = board.parentElement;
+      frame?.parentElement?.insertBefore(hud, frame);
     }
     updateHud();
 
@@ -103,91 +105,28 @@
     }
   }
 
-  function isFailureCell(cell) {
-    const value = `${cell.className} ${cell.getAttribute("aria-label") || ""} ${compactText(cell)}`.toLowerCase();
-    return /mine|bomb|voltorb|찌리리공|폭발|실패/.test(value) && !/남은/.test(value);
-  }
-
-  function isOpenedCell(cell) {
-    const value = `${cell.className} ${cell.getAttribute("aria-pressed") || ""}`.toLowerCase();
-    return cell.disabled || /open|reveal|clear|safe|active/.test(value);
-  }
-
-  function toggleLocalMark(cell) {
-    if (locallyMarked.has(cell)) {
-      locallyMarked.delete(cell);
-      cell.classList.remove("is-voltorb-marked");
-      cell.removeAttribute("data-voltorb-mark");
-      markedCount = Math.max(0, markedCount - 1);
-      showToast("전기 표식을 해제했어요", "info", cell);
-    } else {
-      locallyMarked.add(cell);
-      cell.classList.add("is-voltorb-marked");
-      cell.dataset.voltorbMark = "위험 칸 표시";
-      markedCount += 1;
-      showToast("위험 칸에 전기 표식을 남겼어요", "success", cell);
-      navigator.vibrate?.(22);
-    }
-    updateHud();
-  }
-
   function prepareCell(cell, index) {
     cell.classList.add(CELL_CLASS);
     if (!cell.getAttribute("aria-label")) cell.setAttribute("aria-label", `${index + 1}번 탐색 칸`);
-    if (preparedCells.has(cell)) return;
-    preparedCells.add(cell);
-
-    const cancelPress = () => {
-      const timer = pressTimers.get(cell);
-      if (timer) window.clearTimeout(timer);
-      pressTimers.delete(cell);
-      cell.classList.remove("is-pressing");
-    };
-
-    cell.addEventListener("pointerdown", (event) => {
-      if (event.pointerType === "mouse" && event.button !== 0) return;
-      cancelPress();
-      cell.classList.add("is-pressing");
-      const timer = window.setTimeout(() => {
-        pressTimers.delete(cell);
-        suppressClickUntil.set(cell, Date.now() + 650);
-        cell.classList.remove("is-pressing");
-        toggleLocalMark(cell);
-      }, 520);
-      pressTimers.set(cell, timer);
-    }, { passive: true });
-
-    cell.addEventListener("pointerup", cancelPress, { passive: true });
-    cell.addEventListener("pointercancel", cancelPress, { passive: true });
-    cell.addEventListener("pointerleave", cancelPress, { passive: true });
   }
 
   function handleBoardClick(event) {
     const cell = event.target.closest(`.${CELL_CLASS}`);
     if (!cell || !currentBoard?.contains(cell)) return;
 
-    if (locallyMarked.has(cell) || Date.now() < (suppressClickUntil.get(cell) || 0)) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      showToast("표식 칸은 길게 눌러 해제한 뒤 열 수 있어요", "info", cell);
-      return;
-    }
-
     const before = `${cell.className}|${cell.disabled}|${cell.innerHTML}`;
     window.setTimeout(() => {
       if (!document.contains(cell)) return;
       const after = `${cell.className}|${cell.disabled}|${cell.innerHTML}`;
       if (before === after) return;
+      const hitVoltorb = cell.classList.contains("mine-hit");
+      const safeOpened = cell.classList.contains("revealed") && !hitVoltorb;
 
-      if (isFailureCell(cell)) {
+      if (hitVoltorb) {
         combo = 0;
-        currentRoot?.classList.add("voltorb-danger-pulse");
-        window.setTimeout(() => currentRoot?.classList.remove("voltorb-danger-pulse"), 430);
         navigator.vibrate?.([70, 45, 85]);
-        showToast("찌리리공 발견! 다음 칸은 단서를 보고 골라요", "danger", cell);
-      } else if (isOpenedCell(cell)) {
+      } else if (safeOpened) {
         combo += 1;
-        openCount += 1;
         bestCombo = Math.max(bestCombo, combo);
         safeSet(BEST_COMBO_KEY, String(bestCombo));
         cell.classList.add("is-voltorb-success");
@@ -208,8 +147,6 @@
       currentRoot = root;
       currentBoard = board;
       combo = 0;
-      openCount = 0;
-      markedCount = 0;
       board.addEventListener("click", handleBoardClick, true);
     }
 
@@ -229,7 +166,7 @@
   }
 
   const observationRoot = document.getElementById("screen-mine") || document.body;
-  new MutationObserver(scheduleEnhance).observe(observationRoot, { childList: true, subtree: true });
+  new MutationObserver(scheduleEnhance).observe(observationRoot, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
   window.addEventListener("resize", scheduleEnhance, { passive: true });
   scheduleEnhance();
 })();

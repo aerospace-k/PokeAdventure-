@@ -4,7 +4,7 @@
   const trainers = [
     ["레드","red.png","관동"],["이슬","misty.png","관동"],["웅이","brock.png","관동"],
     ["세레나","serena.png","칼로스"],["빛나","dawn.png","신오"],["봄이","may.png","호연"],
-    ["릴리에","lillie.png","알로라"],["그린","blue.png","관동"],["로켓단 로사·로이","jessiejames-gen1.png","로켓단"],
+    ["릴리에","lillie.png","알로라"],["그린","blue.png","관동"],["로켓단 로사·로이","./assets/team-rocket-jessie-james-modern.png","로켓단"],
     ["리프","leaf-gen3.png","관동"],["휘웅","brendan.png","호연"],["광휘","lucas.png","신오"],
     ["투희","hilda.png","하나"],["명희","rosa.png","하나"],["투지","hilbert.png","하나"],
     ["공명","nate.png","하나"],["칼름","calem.png","칼로스"],["미월","selene.png","알로라"],
@@ -35,7 +35,7 @@
       const fallback = document.createElement("span");
       fallback.textContent = trainer[0];
       const image = document.createElement("img");
-      image.src = spriteBase + trainer[1];
+      image.src = trainer[1].startsWith("./assets/") ? trainer[1] : spriteBase + trainer[1];
       image.alt = trainer[0] + " 트레이너";
       image.loading = "eager";
       image.decoding = "async";
