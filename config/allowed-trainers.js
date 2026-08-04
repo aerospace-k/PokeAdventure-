@@ -6,5 +6,6 @@
 window.POKE_ALLOWED_TRAINER_NAMES = [
   "전수민",
   "김규민",
-  "심지호"
+  "심지호",
+  "김유준"
 ];
