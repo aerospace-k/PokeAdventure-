@@ -737,12 +737,33 @@ function levelUpSound() {
         [784, 0.32, 0.27, 0.015],
     ]);
 }
-function musicNote(frequency) {
-    const volumeScale = window.matchMedia("(pointer: coarse)").matches ? 1.5 : 1;
-    playNotes([
-        [frequency, 0.5, 0, 0.0156 * volumeScale, "triangle"],
-        [frequency * 2, 0.34, 0.035, 0.0048 * volumeScale, "sine"],
-    ], true);
+const MUSIC_VOLUME_BOOST = 2.898;
+const MUSIC_STEP_MS = 300;
+const ADVENTURE_MELODY = [
+    523, 659, 784, 659, 698, 880, 784, 0, 587, 698, 880, 784, 698, 659, 587, 0,
+    659, 784, 1047, 988, 880, 784, 698, 659, 587, 698, 659, 587, 523, 392, 440, 0,
+];
+const ADVENTURE_CHORDS = [
+    [131, 262, 330, 392], [175, 349, 440, 523], [147, 294, 349, 440], [98, 196, 247, 294],
+    [110, 220, 262, 330], [175, 349, 440, 523], [98, 196, 247, 294], [131, 262, 330, 392],
+];
+function playMusicStep(index) {
+    const step = index % ADVENTURE_MELODY.length;
+    const frequency = ADVENTURE_MELODY[step];
+    const chord = ADVENTURE_CHORDS[Math.floor(step / 4) % ADVENTURE_CHORDS.length];
+    const volumeScale = MUSIC_VOLUME_BOOST * (window.matchMedia("(pointer: coarse)").matches ? 1.5 : 1);
+    const notes = [];
+    if (frequency)
+        notes.push([frequency, .23, 0, .01872 * volumeScale, "triangle"]);
+    if (step % 2 === 0)
+        notes.push([chord[0], .26, 0, .0048 * volumeScale, "sine"]);
+    else
+        notes.push([chord[index % 3 + 1], .12, .03, .0032 * volumeScale, "square"]);
+    if (step % 4 === 0)
+        notes.push([82, .08, 0, .0024 * volumeScale, "sine"]);
+    else if (step % 4 === 2)
+        notes.push([1100, .035, 0, .0012 * volumeScale, "square"]);
+    playNotes(notes, true);
 }
 function playPokemonCry(id, volume = .16) {
     if (!sfxEnabled)
@@ -860,15 +881,14 @@ function startMusic() {
     if (!musicEnabled || musicTimer !== null)
         return;
     let index = 0;
-    const notes = [262, 330, 392, 330, 349, 440, 392, 330];
     const playNextMusicNote = () => {
         if (musicEnabled) {
-            musicNote(notes[index % notes.length]);
+            playMusicStep(index);
             index += 1;
         }
     };
     playNextMusicNote();
-    musicTimer = appSetInterval(playNextMusicNote, 720);
+    musicTimer = appSetInterval(playNextMusicNote, MUSIC_STEP_MS);
 }
 function stopMusic() {
     if (musicTimer !== null)
@@ -881,9 +901,6 @@ function showToast(message) {
     toast.classList.add("show");
     window.setTimeout(() => toast.classList.remove("show"), 2200);
 }
-window.addEventListener("poke-update-ready", () => {
-    showToast("새 버전이 준비됐어요. 다음 실행부터 자동으로 적용돼요.");
-});
 const state = { grade: null, mode: null, diff: "easy" };
 function showScreen(name) {
     document.querySelectorAll(".screen").forEach((screen) => screen.classList.remove("active"));
