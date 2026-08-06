@@ -1,4 +1,4 @@
-const CACHE_NAME = "pokemon-learning-adventure-v1.0.79";
+const CACHE_NAME = "pokemon-learning-adventure-v1.0.80";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -14,6 +14,7 @@ const APP_SHELL = [
   "./assets/pokeball-favicon.svg",
   "./assets/pokeball-icon-192.png",
   "./assets/pokeball-icon-512.png",
+  "./assets/adventure-bgm.wav",
   "./assets/team-rocket-jessie-james-modern.png"
 ];
 
