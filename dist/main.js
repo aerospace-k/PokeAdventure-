@@ -639,8 +639,6 @@ function ensureAudio() {
                 return null;
             audioContext = new AudioContextConstructor();
         }
-        if (audioContext.state === "suspended")
-            void audioContext.resume();
         return audioContext;
     }
     catch {
@@ -651,22 +649,22 @@ function unlockAudioFromGesture() {
     const context = ensureAudio();
     if (!context)
         return;
-    const prime = () => {
-        if (audioPrimed || context.state !== "running")
-            return;
-        const oscillator = context.createOscillator();
-        const gain = context.createGain();
-        gain.gain.value = .0001;
-        oscillator.connect(gain);
-        gain.connect(context.destination);
-        oscillator.start();
-        oscillator.stop(context.currentTime + .025);
+    const needsResume = context.state !== "running";
+    if (!audioPrimed) {
+        const source = context.createBufferSource();
+        source.buffer = context.createBuffer(1, 1, context.sampleRate);
+        source.connect(context.destination);
+        source.start();
         audioPrimed = true;
+    }
+    const ready = () => {
+        if (context.state === "running" && musicTimer !== null) {
+            stopMusic();
+            startMusic();
+        }
     };
-    if (context.state === "running")
-        prime();
-    else
-        void context.resume().then(prime).catch(() => undefined);
+    if (needsResume)
+        void context.resume().then(ready).catch(() => undefined);
 }
 function softNote(frequency, duration = 0.12, volume = 0.018, delay = 0, type = "sine", bypassSfx = false, endFrequency = frequency) {
     if (!bypassSfx && !sfxEnabled)
