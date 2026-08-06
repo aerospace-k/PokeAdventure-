@@ -627,7 +627,7 @@ function readLastPlay() {
 let audioContext = null;
 let sfxEnabled = true;
 let musicEnabled = true;
-let musicTimer = null;
+let musicAudio = null;
 let cryAudio = null;
 let audioPrimed = false;
 function ensureAudio() {
@@ -647,24 +647,17 @@ function ensureAudio() {
 }
 function unlockAudioFromGesture() {
     const context = ensureAudio();
-    if (!context)
-        return;
-    const needsResume = context.state !== "running";
-    if (!audioPrimed) {
+    if (context && !audioPrimed) {
         const source = context.createBufferSource();
         source.buffer = context.createBuffer(1, 1, context.sampleRate);
         source.connect(context.destination);
         source.start();
         audioPrimed = true;
     }
-    const ready = () => {
-        if (context.state === "running" && musicTimer !== null) {
-            stopMusic();
-            startMusic();
-        }
-    };
-    if (needsResume)
-        void context.resume().then(ready).catch(() => undefined);
+    if (context && context.state !== "running")
+        void context.resume().catch(() => undefined);
+    if (musicEnabled && !byId("app").classList.contains("hidden-panel"))
+        startMusic();
 }
 function softNote(frequency, duration = 0.12, volume = 0.018, delay = 0, type = "sine", bypassSfx = false, endFrequency = frequency) {
     if (!bypassSfx && !sfxEnabled)
@@ -734,34 +727,6 @@ function levelUpSound() {
         [659, 0.25, 0.17, 0.017],
         [784, 0.32, 0.27, 0.015],
     ]);
-}
-const MUSIC_VOLUME_BOOST = 2.898;
-const MUSIC_STEP_MS = 300;
-const ADVENTURE_MELODY = [
-    523, 659, 784, 659, 698, 880, 784, 0, 587, 698, 880, 784, 698, 659, 587, 0,
-    659, 784, 1047, 988, 880, 784, 698, 659, 587, 698, 659, 587, 523, 392, 440, 0,
-];
-const ADVENTURE_CHORDS = [
-    [131, 262, 330, 392], [175, 349, 440, 523], [147, 294, 349, 440], [98, 196, 247, 294],
-    [110, 220, 262, 330], [175, 349, 440, 523], [98, 196, 247, 294], [131, 262, 330, 392],
-];
-function playMusicStep(index) {
-    const step = index % ADVENTURE_MELODY.length;
-    const frequency = ADVENTURE_MELODY[step];
-    const chord = ADVENTURE_CHORDS[Math.floor(step / 4) % ADVENTURE_CHORDS.length];
-    const volumeScale = MUSIC_VOLUME_BOOST * (window.matchMedia("(pointer: coarse)").matches ? 1.5 : 1);
-    const notes = [];
-    if (frequency)
-        notes.push([frequency, .23, 0, .01872 * volumeScale, "triangle"]);
-    if (step % 2 === 0)
-        notes.push([chord[0], .26, 0, .0048 * volumeScale, "sine"]);
-    else
-        notes.push([chord[index % 3 + 1], .12, .03, .0032 * volumeScale, "square"]);
-    if (step % 4 === 0)
-        notes.push([82, .08, 0, .0024 * volumeScale, "sine"]);
-    else if (step % 4 === 2)
-        notes.push([1100, .035, 0, .0012 * volumeScale, "square"]);
-    playNotes(notes, true);
 }
 function playPokemonCry(id, volume = .16) {
     if (!sfxEnabled)
@@ -876,22 +841,17 @@ function applyChoicePenalty(containerId, selector, selected, correctButton, feed
     return false;
 }
 function startMusic() {
-    if (!musicEnabled || musicTimer !== null)
+    if (!musicEnabled)
         return;
-    let index = 0;
-    const playNextMusicNote = () => {
-        if (musicEnabled) {
-            playMusicStep(index);
-            index += 1;
-        }
-    };
-    playNextMusicNote();
-    musicTimer = appSetInterval(playNextMusicNote, MUSIC_STEP_MS);
+    if (!musicAudio) {
+        musicAudio = new Audio("./assets/adventure-bgm.wav");
+        musicAudio.loop = true;
+        musicAudio.preload = "auto";
+    }
+    void musicAudio.play().catch(() => undefined);
 }
 function stopMusic() {
-    if (musicTimer !== null)
-        window.clearInterval(musicTimer);
-    musicTimer = null;
+    musicAudio?.pause();
 }
 function showToast(message) {
     const toast = byId("toast");
