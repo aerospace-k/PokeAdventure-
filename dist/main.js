@@ -740,8 +740,8 @@ function levelUpSound() {
 function musicNote(frequency) {
     const volumeScale = window.matchMedia("(pointer: coarse)").matches ? 1.5 : 1;
     playNotes([
-        [frequency, 0.5, 0, 0.013 * volumeScale, "triangle"],
-        [frequency * 2, 0.34, 0.035, 0.004 * volumeScale, "sine"],
+        [frequency, 0.5, 0, 0.0156 * volumeScale, "triangle"],
+        [frequency * 2, 0.34, 0.035, 0.0048 * volumeScale, "sine"],
     ], true);
 }
 function playPokemonCry(id, volume = .16) {
