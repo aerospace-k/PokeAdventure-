@@ -629,10 +629,16 @@ let sfxEnabled = true;
 let musicEnabled = true;
 let musicTimer = null;
 let cryAudio = null;
+let audioPrimed = false;
 function ensureAudio() {
     try {
-        if (!audioContext)
-            audioContext = new AudioContext();
+        if (!audioContext) {
+            const AudioContextConstructor = window.AudioContext
+                || window.webkitAudioContext;
+            if (!AudioContextConstructor)
+                return null;
+            audioContext = new AudioContextConstructor();
+        }
         if (audioContext.state === "suspended")
             void audioContext.resume();
         return audioContext;
@@ -640,6 +646,27 @@ function ensureAudio() {
     catch {
         return null;
     }
+}
+function unlockAudioFromGesture() {
+    const context = ensureAudio();
+    if (!context)
+        return;
+    const prime = () => {
+        if (audioPrimed || context.state !== "running")
+            return;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        gain.gain.value = .0001;
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime + .025);
+        audioPrimed = true;
+    };
+    if (context.state === "running")
+        prime();
+    else
+        void context.resume().then(prime).catch(() => undefined);
 }
 function softNote(frequency, duration = 0.12, volume = 0.018, delay = 0, type = "sine", bypassSfx = false, endFrequency = frequency) {
     if (!bypassSfx && !sfxEnabled)
@@ -711,9 +738,10 @@ function levelUpSound() {
     ]);
 }
 function musicNote(frequency) {
+    const volumeScale = window.matchMedia("(pointer: coarse)").matches ? 1.5 : 1;
     playNotes([
-        [frequency, 0.48, 0, 0.0075],
-        [frequency * 2, 0.3, 0.035, 0.0022],
+        [frequency, 0.5, 0, 0.013 * volumeScale, "triangle"],
+        [frequency * 2, 0.34, 0.035, 0.004 * volumeScale, "sine"],
     ], true);
 }
 function playPokemonCry(id, volume = .16) {
@@ -833,12 +861,14 @@ function startMusic() {
         return;
     let index = 0;
     const notes = [262, 330, 392, 330, 349, 440, 392, 330];
-    musicTimer = appSetInterval(() => {
+    const playNextMusicNote = () => {
         if (musicEnabled) {
             musicNote(notes[index % notes.length]);
             index += 1;
         }
-    }, 720);
+    };
+    playNextMusicNote();
+    musicTimer = appSetInterval(playNextMusicNote, 720);
 }
 function stopMusic() {
     if (musicTimer !== null)
@@ -6514,8 +6544,11 @@ function decorateGameScreens() {
     });
 }
 function bindEvents() {
+    document.addEventListener("pointerdown", unlockAudioFromGesture, { capture: true, passive: true });
+    document.addEventListener("touchend", unlockAudioFromGesture, { capture: true, passive: true });
+    document.addEventListener("keydown", unlockAudioFromGesture, { capture: true });
     byId("introNext").addEventListener("click", () => {
-        ensureAudio();
+        unlockAudioFromGesture();
         if (isAllowedTrainerName(getName())) {
             if (hasSavedAvatar() && hasSavedTrainer())
                 enterApp();
@@ -6696,6 +6729,7 @@ function bindEvents() {
         }
     });
     byId("musicButton").addEventListener("click", () => {
+        unlockAudioFromGesture();
         musicEnabled = !musicEnabled;
         const button = byId("musicButton");
         button.setAttribute("aria-pressed", String(musicEnabled));
@@ -6773,6 +6807,10 @@ restoreLastPlay();
 startIntro();
 window.addEventListener("pagehide", () => { cleanupGame(); stopMusic(); cryAudio?.pause(); if (audioContext?.state === "running")
     void audioContext.suspend(); });
+window.addEventListener("pageshow", () => {
+    if (musicEnabled && !byId("app").classList.contains("hidden-panel"))
+        startMusic();
+});
 const installCoordinateRuleDock = () => {
     let updateQueued = false;
     const syncRuleDock = () => {
