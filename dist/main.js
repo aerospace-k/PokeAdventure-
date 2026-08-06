@@ -1522,7 +1522,7 @@ function loadTrainerAlbumDetail(trainer, index, selected) {
     const detail = byId("pokedexDetail");
     detail.className = "pokedex-detail trainer-album-detail";
     detail.replaceChildren();
-    if (window.matchMedia("(max-width: 700px)").matches) {
+    if (innerWidth <= 700) {
         window.requestAnimationFrame(() => detail.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
     const hero = trainerMedia(trainer.file, trainer.name, "trainer-album-hero");
@@ -1586,7 +1586,7 @@ async function loadPokedexDetail(pokemon, selected) {
     const detail = byId("pokedexDetail");
     detail.replaceChildren();
     detail.className = "pokedex-detail";
-    if (window.matchMedia("(max-width: 700px)").matches) {
+    if (innerWidth <= 700) {
         window.requestAnimationFrame(() => detail.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
     const loading = document.createElement("p");
@@ -6696,6 +6696,7 @@ function bindEvents() {
         else
             renderTrainerAlbumGrid(unlockedTrainerCountAtLevel(getTrainerProgress().current.level));
     }));
+    byId("screen-pokedex").onwheel = e => innerWidth < 901 || (byId("pokedexGrid").scrollTop += e.deltaY, false);
     document.querySelectorAll("[data-action]").forEach((button) => {
         button.addEventListener("click", () => {
             const action = button.dataset.action;
