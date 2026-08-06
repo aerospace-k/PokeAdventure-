@@ -630,6 +630,14 @@ let musicEnabled = true;
 let musicAudio = null;
 let cryAudio = null;
 let audioPrimed = false;
+function activatePlaybackAudioSession() {
+    try {
+        const audioSession = navigator.audioSession;
+        if (audioSession && audioSession.type !== "playback")
+            audioSession.type = "playback";
+    }
+    catch { }
+}
 function ensureAudio() {
     try {
         if (!audioContext) {
@@ -646,6 +654,7 @@ function ensureAudio() {
     }
 }
 function unlockAudioFromGesture() {
+    activatePlaybackAudioSession();
     const context = ensureAudio();
     if (context && !audioPrimed) {
         const source = context.createBufferSource();
@@ -843,6 +852,7 @@ function applyChoicePenalty(containerId, selector, selected, correctButton, feed
 function startMusic() {
     if (!musicEnabled)
         return;
+    activatePlaybackAudioSession();
     if (!musicAudio) {
         musicAudio = new Audio("./assets/adventure-bgm.wav");
         musicAudio.loop = true;
